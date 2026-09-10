@@ -2929,7 +2929,7 @@ private suspend fun insertMobileIpToSupabase(ipAddress: String): Boolean =
             }
             lastInsertedMobileIp = ipAddress
             true
-        } catch (_: HttpRequestException) {
+        } catch (_: HttpRequestTimeoutException) {
             false
         }
         catch (e: Exception) {
