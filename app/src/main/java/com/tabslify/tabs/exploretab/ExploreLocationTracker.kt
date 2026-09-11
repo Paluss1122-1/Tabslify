@@ -609,7 +609,9 @@ object ExploreLocationTracker {
             }
         }
         stopActivityRecognitionUpdates(appCtx)
-        ExploreWorker.cancel(appCtx)
+        // Intentionally NOT cancelling ExploreWorker here: it should keep running as a
+        // watchdog if the service died unexpectedly (OS/OEM kill), instead of only being
+        // switched off on the next deliberate stop().
         locationCallback = null
         lastLocation = null
         currentMode = "UNKNOWN"
@@ -617,6 +619,10 @@ object ExploreLocationTracker {
         lastConfidentMode = "UNKNOWN"
         lastConfidentAt = 0L
         _currentActivity.value = ExploreActivityInfo()
+        // Reset isEnabled here too, otherwise the stale flag permanently blocks every
+        // future start() call (geofence/resume) until the app is restarted.
+        isEnabled = false
+        _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
     }
 
     fun stop(context: Context) {
@@ -635,6 +641,7 @@ object ExploreLocationTracker {
             }
         }
         stopActivityRecognitionUpdates(appCtx)
+        ExploreWorker.cancel(appCtx)
 
         try {
             appCtx.stopService(Intent(appCtx, ExploreForegroundService::class.java))
