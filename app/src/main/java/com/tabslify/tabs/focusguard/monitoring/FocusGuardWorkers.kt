@@ -247,10 +247,13 @@ fun scheduleFocusGuardDailySummary(context: Context) {
         set(Calendar.MILLISECOND, 0)
         if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
     }
+    val summaryIntent = Intent(context, FocusGuardDailySummaryReceiver::class.java).apply {
+        setPackage(context.packageName)
+    }
     val pi = PendingIntent.getBroadcast(
         context,
         DAILY_SUMMARY_REQUEST_CODE,
-        Intent(context, FocusGuardDailySummaryReceiver::class.java),
+        summaryIntent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
     am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi)
