@@ -1575,6 +1575,19 @@
     <string name="import_action_secondary">Import</string> <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:188 | Passwordmanagerscreen.kt:208 | Passwordmanagerscreen.kt:260 -->
     <string name="kein_netzwerk_verfugbar">Kein Netzwerk verfügbar</string> <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:233 -->
     <string name="sync_fehlgeschlagen">Sync fehlgeschlagen: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:248  ||  %1$s=e.message -->
+    <string name="sync_konflikte">Sync-Konflikte</string>
+    <string name="sync_konflikt_cloud_only_entry">Existiert nur in der Cloud - wird nicht automatisch gelöscht.</string>
+    <string name="sync_konflikt_local_only_entry">Existiert nur lokal - wird nicht automatisch hochgeladen.</string>
+    <string name="sync_konflikt_totp_cloud_only">2FA-Secret nur in der Cloud - lokal kein passender 2FA-Eintrag.</string>
+    <string name="sync_konflikt_totp_local_only">2FA-Secret nur lokal - fehlt in der Cloud.</string>
+    <string name="sync_konflikt_totp_different">2FA-Secret in Cloud und lokal unterscheiden sich.</string>
+    <string name="sync_konflikt_entscheiden">Was soll passieren?</string>
+    <string name="sync_cloud_behalten">Cloud behalten</string>
+    <string name="sync_lokal_hochladen">Lokal hochladen</string>
+    <string name="sync_uberspringen">Überspringen</string>
+    <string name="sync_totp_cloud_behalten">Cloud-2FA behalten</string>
+    <string name="sync_totp_cloud_loschen">Cloud-2FA entfernen</string>
+    <string name="sync_totp_lokal_ubernehmen">Lokales 2FA übernehmen</string>
     <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:323 -->
     <string name="eintrag_gespeichert">✅ Eintrag gespeichert</string> <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:366 -->
     <string name="aktualisiert_2">✅ Aktualisiert</string> <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:382 -->
