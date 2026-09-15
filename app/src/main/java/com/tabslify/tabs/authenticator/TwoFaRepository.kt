@@ -59,6 +59,6 @@ data class SyncResult(
     val uploaded: Int,
     val downloaded: Int,
     val total: Int,
-    val pendingDecisions: List<TwoFAEntry> = emptyList(),
+    val pendingConflicts: List<SyncConflict> = emptyList(),
     val error: String? = null
 )
