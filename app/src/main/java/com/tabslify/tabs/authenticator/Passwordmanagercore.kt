@@ -21,9 +21,6 @@ import com.tabslify.core.objects.prvt
 import com.tabslify.privatetabslifyapp.isOnline
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.nio.ByteBuffer
@@ -127,12 +124,12 @@ object CloudCrypto {
     }
 
     fun encryptForCloud(plaintext: String): String {
-        if (plaintext.isEmpty() || prvt()) return ""
+        if (plaintext.isEmpty()) return ""
         return encryptWithKey(plaintext, cachedKey())
     }
 
     fun decryptFromCloud(ciphertext: String): String? {
-        if (ciphertext.isEmpty() || prvt()) return ""
+        if (ciphertext.isEmpty()) return ""
         return try {
             decryptWithKey(ciphertext, cachedKey())
         } catch (e: Exception) {
@@ -264,6 +261,28 @@ data class PasswordEntrySupabase(
     val totp_secret: String? = null
 )
 
+enum class SyncConflictType {
+    CLOUD_ONLY_ENTRY,
+    LOCAL_ONLY_ENTRY,
+    TOTP_CLOUD_ONLY,
+    TOTP_LOCAL_ONLY,
+    TOTP_DIFFERENT
+}
+
+data class SyncConflict(
+    val type: SyncConflictType,
+    val cloudEntry: PasswordEntrySupabase? = null,
+    val localEntry: PasswordEntry? = null,
+    val localTotp: String? = null
+)
+
+enum class SyncConflictDecision {
+    KEEP_CLOUD,
+    KEEP_LOCAL,
+    DELETE_CLOUD,
+    UPLOAD_LOCAL
+}
+
 suspend fun syncPasswordEntriesWithCloud(
     passwordDb: PasswordDatabase,
     twoFaDb: TwoFADatabase,
@@ -299,6 +318,8 @@ suspend fun syncPasswordEntriesWithCloud(
             }
 
             val cloudNames = mutableSetOf<String>()
+            val pendingConflicts = mutableListOf<SyncConflict>()
+            var autoUpdated = 0
 
             cloudEntries.forEach { cloud ->
                 cloudNames.add(cloud.name.trim().lowercase())
@@ -307,109 +328,115 @@ suspend fun syncPasswordEntriesWithCloud(
                     localPasswords.find { it.name == cloud.name && it.username == cloudUser }
 
                 if (existing == null) {
-                    // Lokal gelöscht -> auf Cloud löschen
+                    val matchedSecret = localTwoFa.firstOrNull { fa ->
+                        val n = fa.name.lowercase()
+                        val ln = cloud.name.lowercase()
+                        val lu = cloud.url?.lowercase() ?: ""
+                        n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ").any { lu.contains(it) })
+                    }?.secret
+                    pendingConflicts += SyncConflict(
+                        type = SyncConflictType.CLOUD_ONLY_ENTRY,
+                        cloudEntry = cloud,
+                        localTotp = matchedSecret
+                    )
+                    return@forEach
+                }
+
+                val decryptedPw = CloudCrypto.decryptFromCloud(cloud.encrypted_password)
+                val matchedSecret = localTwoFa.firstOrNull { fa ->
+                    val n = fa.name.lowercase()
+                    val ln = existing.name.lowercase()
+                    val lu = existing.url.lowercase()
+                    n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ")
+                        .any { lu.contains(it) })
+                }?.secret
+
+                val hasCloudTotp = !cloud.totp_secret.isNullOrEmpty()
+                val cloudTotpDecrypted =
+                    cloud.totp_secret?.takeIf { it.isNotEmpty() }?.let { CloudCrypto.decryptFromCloud(it) }
+
+                // TOTP-Konflikte sammeln statt still zu überschreiben
+                if (hasCloudTotp && matchedSecret == null) {
+                    pendingConflicts += SyncConflict(
+                        type = SyncConflictType.TOTP_CLOUD_ONLY,
+                        cloudEntry = cloud,
+                        localEntry = existing
+                    )
+                } else if (!hasCloudTotp && matchedSecret != null) {
+                    pendingConflicts += SyncConflict(
+                        type = SyncConflictType.TOTP_LOCAL_ONLY,
+                        cloudEntry = cloud,
+                        localEntry = existing,
+                        localTotp = matchedSecret
+                    )
+                } else if (hasCloudTotp && matchedSecret != null && cloudTotpDecrypted != matchedSecret) {
+                    pendingConflicts += SyncConflict(
+                        type = SyncConflictType.TOTP_DIFFERENT,
+                        cloudEntry = cloud,
+                        localEntry = existing,
+                        localTotp = matchedSecret
+                    )
+                }
+
+                // Feld-Änderungen (Passwort/URL/Notizen) nur automatisch übernehmen,
+                // wenn für diesen Eintrag KEIN TOTP-Konflikt offen ist.
+                val hasTotpConflict = pendingConflicts.any { it.cloudEntry?.id == cloud.id }
+
+                if (!hasTotpConflict &&
+                    (decryptedPw != existing.password || cloud.url != existing.url || cloud.notes != existing.notes)
+                ) {
                     try {
                         cloud.id?.let { id ->
-                            Config.client.postgrest.from("password_entries").delete {
+                            Config.client.postgrest.from("password_entries").update(
+                                PasswordEntrySupabase(
+                                    name = existing.name,
+                                    url = existing.url,
+                                    username = existing.username,
+                                    encrypted_password = CloudCrypto.encryptForCloud(existing.password),
+                                    notes = existing.notes,
+                                    totp_secret = cloud.totp_secret
+                                )
+                            ) {
                                 filter { eq("id", id) }
                             }
                         }
+                        autoUpdated++
                     } catch (e: Exception) {
                         errorInsert(
                             "PasswordRepository",
-                            "Cloud-Delete fehlgeschlagen: ${e.message}",
+                            "Cloud-Update fehlgeschlagen: ${e.message}",
                             Instant.now().toString(),
                             "ERROR"
                         )
                     }
-                } else {
-                    // Existiert lokal, überprüfe auf Änderungen
-                    val decryptedPw = CloudCrypto.decryptFromCloud(cloud.encrypted_password)
+                }
+            }
+
+            // Nur lokal vorhandene Einträge -> nicht automatisch hochladen, sondern fragen
+            val cloudPairs = cloudEntries.map { it.name to (it.username ?: "") }.toSet()
+            localPasswords
+                .filter { (it.name to it.username) !in cloudPairs }
+                .forEach { local ->
                     val matchedSecret = localTwoFa.firstOrNull { fa ->
                         val n = fa.name.lowercase()
-                        val ln = existing.name.lowercase()
-                        val lu = existing.url.lowercase()
+                        val ln = local.name.lowercase()
+                        val lu = local.url.lowercase()
                         n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ")
                             .any { lu.contains(it) })
                     }?.secret
-
-                    val encryptedLocalPw = CloudCrypto.encryptForCloud(existing.password)
-                    val encryptedLocalTotp = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
-
-                    val cloudTotpDecrypted =
-                        cloud.totp_secret?.let { CloudCrypto.decryptFromCloud(it) }
-
-                    if (decryptedPw != existing.password || cloud.url != existing.url || cloud.notes != existing.notes || cloudTotpDecrypted != matchedSecret) {
-                        try {
-                            cloud.id?.let { id ->
-                                Config.client.postgrest.from("password_entries").update(
-                                    PasswordEntrySupabase(
-                                        name = existing.name,
-                                        url = existing.url,
-                                        username = existing.username,
-                                        encrypted_password = encryptedLocalPw,
-                                        notes = existing.notes,
-                                        totp_secret = encryptedLocalTotp
-                                    )
-                                ) {
-                                    filter { eq("id", id) }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            errorInsert(
-                                "PasswordRepository",
-                                "Cloud-Update fehlgeschlagen: ${e.message}",
-                                Instant.now().toString(),
-                                "ERROR"
-                            )
-                        }
-                    }
-                }
-            }
-
-            val cloudPairs = cloudEntries.map { it.name to (it.username ?: "") }.toSet()
-            val missingInCloud = localPasswords.filter { (it.name to it.username) !in cloudPairs }
-
-            val toUpload = coroutineScope {
-                missingInCloud.map { local ->
-                    async {
-                        try {
-                            val encryptedPw = CloudCrypto.encryptForCloud(local.password)
-                            val matchedSecret = localTwoFa.firstOrNull { fa ->
-                                val n = fa.name.lowercase()
-                                val ln = local.name.lowercase()
-                                val lu = local.url.lowercase()
-                                n.contains(ln) || ln.contains(n) || (lu.isNotEmpty() && n.split(" ")
-                                    .any { lu.contains(it) })
-                            }?.secret
-                            PasswordEntrySupabase(
-                                name = local.name,
-                                url = local.url,
-                                username = local.username,
-                                encrypted_password = encryptedPw,
-                                notes = local.notes,
-                                totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
-                            )
-                        } catch (_: Exception) {
-                            null
-                        }
-                    }
-                }.awaitAll().filterNotNull()
-            }
-
-            if (toUpload.isNotEmpty()) {
-                try {
-                    Config.client.postgrest.from("password_entries").insert(toUpload)
-                } catch (e: Exception) {
-                    errorInsert(
-                        "PasswordRepository",
-                        "Batch-Upload fehlgeschlagen: ${e.message}",
-                        Instant.now().toString(),
-                        "ERROR"
+                    pendingConflicts += SyncConflict(
+                        type = SyncConflictType.LOCAL_ONLY_ENTRY,
+                        localEntry = local,
+                        localTotp = matchedSecret
                     )
                 }
-            }
-            SyncResult(uploaded = missingInCloud.size, downloaded = 0, total = localPasswords.size)
+
+            SyncResult(
+                uploaded = autoUpdated,
+                downloaded = 0,
+                total = localPasswords.size,
+                pendingConflicts = pendingConflicts
+            )
         } catch (e: Exception) {
             errorInsert(
                 "PasswordRepository",
@@ -418,6 +445,109 @@ suspend fun syncPasswordEntriesWithCloud(
                 "ERROR"
             )
             SyncResult(uploaded = 0, downloaded = 0, total = 0, error = e.message)
+        }
+    }
+}
+
+suspend fun applySyncConflictDecision(
+    conflict: SyncConflict,
+    decision: SyncConflictDecision
+) {
+    if (!prvt()) return
+    withContext(Dispatchers.IO) {
+        try {
+            when (conflict.type) {
+                SyncConflictType.CLOUD_ONLY_ENTRY -> {
+                    if (decision == SyncConflictDecision.DELETE_CLOUD) {
+                        conflict.cloudEntry?.id?.let { id ->
+                            Config.client.postgrest.from("password_entries").delete {
+                                filter { eq("id", id) }
+                            }
+                        }
+                    } else if (decision == SyncConflictDecision.KEEP_CLOUD && conflict.localTotp != null) {
+                        conflict.cloudEntry?.id?.let { id ->
+                            Config.client.postgrest.from("password_entries").update(
+                                PasswordEntrySupabase(
+                                    name = conflict.cloudEntry.name,
+                                    url = conflict.cloudEntry.url,
+                                    username = conflict.cloudEntry.username,
+                                    encrypted_password = conflict.cloudEntry.encrypted_password,
+                                    notes = conflict.cloudEntry.notes,
+                                    totp_secret = CloudCrypto.encryptForCloud(conflict.localTotp)
+                                )
+                            ) {
+                                filter { eq("id", id) }
+                            }
+                        }
+                    }
+                }
+
+                SyncConflictType.LOCAL_ONLY_ENTRY -> {
+                    if (decision == SyncConflictDecision.UPLOAD_LOCAL) {
+                        val local = conflict.localEntry ?: return@withContext
+                        val matchedSecret = conflict.localTotp
+                        Config.client.postgrest.from("password_entries").insert(
+                            PasswordEntrySupabase(
+                                name = local.name,
+                                url = local.url,
+                                username = local.username,
+                                encrypted_password = CloudCrypto.encryptForCloud(local.password),
+                                notes = local.notes,
+                                totp_secret = matchedSecret?.let { CloudCrypto.encryptForCloud(it) }
+                            )
+                        )
+                    }
+                }
+
+                SyncConflictType.TOTP_CLOUD_ONLY -> {
+                    if (decision == SyncConflictDecision.DELETE_CLOUD) {
+                        val cloud = conflict.cloudEntry ?: return@withContext
+                        cloud.id?.let { id ->
+                            Config.client.postgrest.from("password_entries").update(
+                                PasswordEntrySupabase(
+                                    name = cloud.name,
+                                    url = cloud.url,
+                                    username = cloud.username,
+                                    encrypted_password = cloud.encrypted_password,
+                                    notes = cloud.notes,
+                                    totp_secret = ""
+                                )
+                            ) {
+                                filter { eq("id", id) }
+                            }
+                        }
+                    }
+                }
+
+                SyncConflictType.TOTP_LOCAL_ONLY,
+                SyncConflictType.TOTP_DIFFERENT -> {
+                    if (decision == SyncConflictDecision.UPLOAD_LOCAL) {
+                        val cloud = conflict.cloudEntry ?: return@withContext
+                        val localTotp = conflict.localTotp ?: return@withContext
+                        cloud.id?.let { id ->
+                            Config.client.postgrest.from("password_entries").update(
+                                PasswordEntrySupabase(
+                                    name = cloud.name,
+                                    url = cloud.url,
+                                    username = cloud.username,
+                                    encrypted_password = cloud.encrypted_password,
+                                    notes = cloud.notes,
+                                    totp_secret = CloudCrypto.encryptForCloud(localTotp)
+                                )
+                            ) {
+                                filter { eq("id", id) }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            errorInsert(
+                "PasswordRepository",
+                "Sync-Entscheidung fehlgeschlagen: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
+            )
         }
     }
 }
