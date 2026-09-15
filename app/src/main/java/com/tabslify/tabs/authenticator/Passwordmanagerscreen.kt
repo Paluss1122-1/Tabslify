@@ -141,6 +141,7 @@ fun PasswordManagerScreen(
     var detailEntry by remember { mutableStateOf<PasswordEntry?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isSyncing by remember { mutableStateOf(false) }
+    var pendingConflicts by remember { mutableStateOf<List<SyncConflict>>(emptyList()) }
 
     fun reload() {
         scope.launch {
@@ -232,18 +233,21 @@ fun PasswordManagerScreen(
                                             isSyncing = true
                                             scope.launch {
                                                 try {
-                                                    if (syncPasswordEntriesWithCloud(
-                                                            db,
-                                                            twoFaDb,
-                                                            context
-                                                        ).error != null
-                                                    ) {
+                                                    val result = syncPasswordEntriesWithCloud(
+                                                        db,
+                                                        twoFaDb,
+                                                        context
+                                                    )
+                                                    if (result.error != null) {
                                                         Toast.makeText(
                                                             context,
                                                             keinNetzwerkVerfuegbarMsg,
                                                             Toast.LENGTH_LONG
                                                         ).show()
                                                         return@launch
+                                                    }
+                                                    if (result.pendingConflicts.isNotEmpty()) {
+                                                        pendingConflicts = result.pendingConflicts
                                                     }
                                                     entries = db.passwordDao().getAll()
                                                     prefs.edit(commit = true) {
@@ -417,6 +421,21 @@ fun PasswordManagerScreen(
             twoFaDb = twoFaDb,
             onDismiss = { showImportDialog = false },
             onImportDone = { reload() }
+        )
+    }
+
+    if (pendingConflicts.isNotEmpty()) {
+        SyncConflictDialog(
+            conflicts = pendingConflicts,
+            onDecision = { conflict, decision ->
+                scope.launch {
+                    applySyncConflictDecision(conflict, decision)
+                }
+            },
+            onDone = {
+                pendingConflicts = emptyList()
+                reload()
+            }
         )
     }
 }
@@ -1416,4 +1435,158 @@ fun copyToClipboard(context: Context, label: String, value: String, kopiertMsg: 
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText(label, value))
     Toast.makeText(context, kopiertMsg.format(label), Toast.LENGTH_SHORT).show()
+}
+
+@Composable
+fun SyncConflictDialog(
+    conflicts: List<SyncConflict>,
+    onDecision: (SyncConflict, SyncConflictDecision) -> Unit,
+    onDone: () -> Unit
+) {
+    var index by remember { mutableIntStateOf(0) }
+
+    if (index >= conflicts.size) {
+        LaunchedEffect(Unit) { onDone() }
+        return
+    }
+
+    val conflict = conflicts[index]
+
+    Dialog(onDismissRequest = {}, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Surface1)
+                .padding(24.dp)
+        ) {
+            Text(
+                stringResource(R.string.sync_konflikte),
+                color = TextP,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(stringResource(R.string.fortschritt_von, index + 1, conflicts.size), color = TextS, fontSize = 12.sp)
+            Spacer(Modifier.height(16.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Surface2)
+                    .padding(16.dp)
+            ) {
+                val entryName = conflict.cloudEntry?.name
+                    ?: conflict.localEntry?.name
+                    ?: "?"
+                Text(entryName, color = TextP, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                val sub = conflict.cloudEntry?.username?.takeIf { it.isNotEmpty() }
+                    ?: conflict.localEntry?.username?.takeIf { it.isNotEmpty() }
+                    ?: ""
+                if (sub.isNotEmpty()) Text(sub, color = TextS, fontSize = 13.sp)
+
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    when (conflict.type) {
+                        SyncConflictType.CLOUD_ONLY_ENTRY -> stringResource(R.string.sync_konflikt_cloud_only_entry)
+                        SyncConflictType.LOCAL_ONLY_ENTRY -> stringResource(R.string.sync_konflikt_local_only_entry)
+                        SyncConflictType.TOTP_CLOUD_ONLY -> stringResource(R.string.sync_konflikt_totp_cloud_only)
+                        SyncConflictType.TOTP_LOCAL_ONLY -> stringResource(R.string.sync_konflikt_totp_local_only)
+                        SyncConflictType.TOTP_DIFFERENT -> stringResource(R.string.sync_konflikt_totp_different)
+                    },
+                    color = TextS,
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Text(stringResource(R.string.sync_konflikt_entscheiden), color = TextP, fontSize = 13.sp)
+            Spacer(Modifier.height(12.dp))
+
+            when (conflict.type) {
+                SyncConflictType.CLOUD_ONLY_ENTRY -> {
+                    Button(
+                        onClick = {
+                            onDecision(conflict, SyncConflictDecision.KEEP_CLOUD)
+                            index++
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_cloud_behalten)) }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            onDecision(conflict, SyncConflictDecision.DELETE_CLOUD)
+                            index++
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.loschen), color = AccentRed) }
+                }
+
+                SyncConflictType.LOCAL_ONLY_ENTRY -> {
+                    Button(
+                        onClick = {
+                            onDecision(conflict, SyncConflictDecision.UPLOAD_LOCAL)
+                            index++
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_lokal_hochladen)) }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            onDecision(conflict, SyncConflictDecision.KEEP_LOCAL)
+                            index++
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_uberspringen), color = TextS) }
+                }
+
+                SyncConflictType.TOTP_CLOUD_ONLY -> {
+                    Button(
+                        onClick = {
+                            onDecision(conflict, SyncConflictDecision.KEEP_CLOUD)
+                            index++
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_totp_cloud_behalten)) }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            onDecision(conflict, SyncConflictDecision.DELETE_CLOUD)
+                            index++
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_totp_cloud_loschen), color = AccentRed) }
+                }
+
+                SyncConflictType.TOTP_LOCAL_ONLY,
+                SyncConflictType.TOTP_DIFFERENT -> {
+                    Button(
+                        onClick = {
+                            onDecision(conflict, SyncConflictDecision.UPLOAD_LOCAL)
+                            index++
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_totp_lokal_ubernehmen)) }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            onDecision(conflict, SyncConflictDecision.KEEP_CLOUD)
+                            index++
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_totp_cloud_behalten), color = TextS) }
+                }
+            }
+        }
+    }
 }
