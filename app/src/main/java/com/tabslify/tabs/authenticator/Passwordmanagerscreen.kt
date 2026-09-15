@@ -99,6 +99,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.tabslify.R
+import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.prvt
 import kotlinx.coroutines.Dispatchers
@@ -221,7 +222,8 @@ fun PasswordManagerScreen(
                             IconButton(
                                 onClick = {
                                     if (!isSyncing && realDevice) {
-                                        val prefs = context.getSharedPreferences(
+                                        val appContext = context.applicationContext
+                                        val prefs = appContext.getSharedPreferences(
                                             "sync_prefs",
                                             Context.MODE_PRIVATE
                                         )
@@ -231,16 +233,16 @@ fun PasswordManagerScreen(
 
                                         if (currentTime - lastSyncTime > 20_000L) {
                                             isSyncing = true
-                                            scope.launch {
+                                            appScope.launch {
                                                 try {
                                                     val result = syncPasswordEntriesWithCloud(
                                                         db,
                                                         twoFaDb,
-                                                        context
+                                                        appContext
                                                     )
                                                     if (result.error != null) {
                                                         Toast.makeText(
-                                                            context,
+                                                            appContext,
                                                             keinNetzwerkVerfuegbarMsg,
                                                             Toast.LENGTH_LONG
                                                         ).show()
@@ -258,7 +260,7 @@ fun PasswordManagerScreen(
                                                     }
                                                 } catch (e: Exception) {
                                                     Toast.makeText(
-                                                        context,
+                                                        appContext,
                                                         syncFehlgeschlagenMsg.format(e.message),
                                                         Toast.LENGTH_LONG
                                                     ).show()
