@@ -336,20 +336,20 @@ fun showDeleteConfirmation(imageIndex: Int, context: Context) {
             null
         }
 
-        val deleteIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_DELETE_IMAGE
-            putExtra(EXTRA_IMAGE_INDEX, imageIndex)
-        }
+        val deleteBase = Intent(context, QuietHoursNotificationService::class.java)
+        deleteBase.action = ACTION_DELETE_IMAGE
+        deleteBase.putExtra(EXTRA_IMAGE_INDEX, imageIndex)
+        deleteBase.setPackage(context.packageName)
         val deletePendingIntent = PendingIntent.getService(
-            context, 81, deleteIntent,
+            context, 81, deleteBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val cancelIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_CANCEL_DELETE
-        }
+        val cancelBase = Intent(context, QuietHoursNotificationService::class.java)
+        cancelBase.action = ACTION_CANCEL_DELETE
+        cancelBase.setPackage(context.packageName)
         val cancelPendingIntent = PendingIntent.getService(
-            context, 82, cancelIntent,
+            context, 82, cancelBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -499,29 +499,29 @@ private fun showGalleryImage(index: Int, context: Context) {
             return
         }
 
-        val prevIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_PREV_GALLERY_IMAGE
-        }
+        val prevBase = Intent(context, QuietHoursNotificationService::class.java)
+        prevBase.action = ACTION_PREV_GALLERY_IMAGE
+        prevBase.setPackage(context.packageName)
         val prevPendingIntent = PendingIntent.getService(
-            context, 71, prevIntent,
+            context, 71, prevBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val nextIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_NEXT_GALLERY_IMAGE
-        }
+        val nextBase = Intent(context, QuietHoursNotificationService::class.java)
+        nextBase.action = ACTION_NEXT_GALLERY_IMAGE
+        nextBase.setPackage(context.packageName)
         val nextPendingIntent = PendingIntent.getService(
-            context, 72, nextIntent,
+            context, 72, nextBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val confirmDeleteIntent =
-            Intent(context, QuietHoursNotificationService::class.java).apply {
-                action = ACTION_CONFIRM_DELETE_IMAGE
-                putExtra(EXTRA_IMAGE_INDEX, index)
-            }
+        val confirmDeleteBase =
+            Intent(context, QuietHoursNotificationService::class.java)
+        confirmDeleteBase.action = ACTION_CONFIRM_DELETE_IMAGE
+        confirmDeleteBase.putExtra(EXTRA_IMAGE_INDEX, index)
+        confirmDeleteBase.setPackage(context.packageName)
         val confirmDeletePendingIntent = PendingIntent.getService(
-            context, 73, confirmDeleteIntent,
+            context, 73, confirmDeleteBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -531,7 +531,7 @@ private fun showGalleryImage(index: Int, context: Context) {
         }
         val openPendingIntent = PendingIntent.getActivity(
             context, 74, openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(context, GALLERY_CHANNEL_ID)
