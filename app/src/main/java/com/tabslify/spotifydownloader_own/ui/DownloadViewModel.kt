@@ -56,13 +56,13 @@ class DownloadViewModel(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
         }/Tabslify/${state.fileName}"
 
-        val playIntent = Intent(appContext, MediaPlayerService::class.java).apply {
-            action = MediaPlayerService.ACTION_PLAY_ALL_SONGS_AT_INDEX
-            putExtra(MediaPlayerService.EXTRA_SONG_PATH, songPath)
-        }
+        val playBase = Intent(appContext, MediaPlayerService::class.java)
+        playBase.action = MediaPlayerService.ACTION_PLAY_ALL_SONGS_AT_INDEX
+        playBase.putExtra(MediaPlayerService.EXTRA_SONG_PATH, songPath)
+        playBase.setPackage(appContext.packageName)
         val pendingIntent = PendingIntent.getForegroundService(
-            appContext, state.trackId.hashCode(), playIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            appContext, state.trackId.hashCode(), playBase,
+            PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(appContext, MediaPlayerService.CHANNEL_ID)
