@@ -414,11 +414,12 @@ class QuietHoursNotificationService : Service() {
                 if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
             }
 
+            val podcastCheckBase = Intent(context, QuietHoursNotificationService::class.java)
+            podcastCheckBase.action = ACTION_PODCAST_CHECK
+            podcastCheckBase.setPackage(context.packageName)
             val pi = PendingIntent.getService(
                 context, 0,
-                Intent(context, QuietHoursNotificationService::class.java).apply {
-                    action = ACTION_PODCAST_CHECK
-                },
+                podcastCheckBase,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -545,9 +546,11 @@ class QuietHoursNotificationService : Service() {
             }
         }
 
+        val summaryBase = Intent(this, DailySummaryReceiver::class.java)
+        summaryBase.setPackage(packageName)
         val pi = PendingIntent.getBroadcast(
             this, 0,
-            Intent(this, DailySummaryReceiver::class.java),
+            summaryBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -581,11 +584,11 @@ class QuietHoursNotificationService : Service() {
     private fun scheduleSchoolDaySummary(context: Context) {
         if (!prvt()) return
         val alarmManager = context.getSystemService(AlarmManager::class.java)
-        val intent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_SCHOOL_DAY_SUMMARY
-        }
+        val schoolBase = Intent(context, QuietHoursNotificationService::class.java)
+        schoolBase.action = ACTION_SCHOOL_DAY_SUMMARY
+        schoolBase.setPackage(context.packageName)
         val pending = PendingIntent.getService(
-            context, 9001, intent,
+            context, 9001, schoolBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -887,12 +890,12 @@ class QuietHoursNotificationService : Service() {
                         }.also { nm.createNotificationChannel(it) }
                     }
 
-                    val launchIntent = Intent(this, MainActivity::class.java).apply {
-                        putExtra("target", "files")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    }
+                    val launchBase = Intent(this, MainActivity::class.java)
+                    launchBase.putExtra("target", "files")
+                    launchBase.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    launchBase.setPackage(packageName)
                     val pi = PendingIntent.getActivity(
-                        this, SCHOOL_SUMMARY_NOTIF_ID, launchIntent,
+                        this, SCHOOL_SUMMARY_NOTIF_ID, launchBase,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
 
@@ -1263,9 +1266,10 @@ class QuietHoursNotificationService : Service() {
 
         prefs.edit { putLong("last_service_restart_elapsed", now) }
 
-        val restartIntent = Intent(applicationContext, QuietHoursNotificationService::class.java)
+        val restartBase = Intent(applicationContext, QuietHoursNotificationService::class.java)
+        restartBase.setPackage(applicationContext.packageName)
         val pendingIntent = PendingIntent.getService(
-            applicationContext, requestCode, restartIntent,
+            applicationContext, requestCode, restartBase,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
@@ -1418,13 +1422,14 @@ class QuietHoursNotificationService : Service() {
                     ).also { nm.createNotificationChannel(it) }
                 }
 
+                val podcastBase = Intent(context, QuietHoursNotificationService::class.java)
+                podcastBase.action = ACTION_PODCAST_DOWNLOAD
+                podcastBase.putExtra("episodes_json", arr.toString())
+                podcastBase.setPackage(context.packageName)
                 val pi = PendingIntent.getService(
                     context,
                     PODCAST_NOTIFICATION_ID,
-                    Intent(context, QuietHoursNotificationService::class.java).apply {
-                        action = ACTION_PODCAST_DOWNLOAD
-                        putExtra("episodes_json", arr.toString())
-                    },
+                    podcastBase,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
@@ -1597,13 +1602,13 @@ class QuietHoursNotificationService : Service() {
                 ).also { nm.createNotificationChannel(it) }
             }
 
-            val retryIntent = Intent(this, QuietHoursNotificationService::class.java).apply {
-                action = ACTION_PODCAST_RETRY
-            }
+            val retryBase = Intent(this, QuietHoursNotificationService::class.java)
+            retryBase.action = ACTION_PODCAST_RETRY
+            retryBase.setPackage(packageName)
             val retryPendingIntent = PendingIntent.getService(
                 this,
                 PODCAST_NOTIFICATION_ID,
-                retryIntent,
+                retryBase,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
