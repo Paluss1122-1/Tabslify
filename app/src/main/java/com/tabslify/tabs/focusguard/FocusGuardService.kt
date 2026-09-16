@@ -307,8 +307,10 @@ class FocusGuardService : Service() {
     }
 
     private fun createForegroundNotification(): Notification {
+        val contentBase = Intent(this, MainActivity::class.java)
+        contentBase.setPackage(packageName)
         val contentIntent = PendingIntent.getActivity(
-            this, 980, Intent(this, MainActivity::class.java),
+            this, 980, contentBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, SERVICE_CHANNEL_ID)
