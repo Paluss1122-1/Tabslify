@@ -43,8 +43,10 @@ object FocusGuardNotifications {
     ) {
         if (!com.tabslify.tabs.focusguard.data.FocusGuardConfig.notificationsEnabled) return
         ensureChannels(context)
+        val blockBase = Intent(context, MainActivity::class.java)
+        blockBase.setPackage(context.packageName)
         val contentIntent = PendingIntent.getActivity(
-            context, 9500, Intent(context, MainActivity::class.java),
+            context, 9500, blockBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -66,8 +68,10 @@ object FocusGuardNotifications {
     fun postDailySummary(context: Context, usageText: String, goalText: String, sleepText: String) {
         if (!com.tabslify.tabs.focusguard.data.FocusGuardConfig.notificationsEnabled) return
         ensureChannels(context)
+        val summaryBase = Intent(context, MainActivity::class.java)
+        summaryBase.setPackage(context.packageName)
         val contentIntent = PendingIntent.getActivity(
-            context, 9501, Intent(context, MainActivity::class.java),
+            context, 9501, summaryBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -102,8 +106,10 @@ object FocusGuardNotifications {
     fun postStudyReminder(context: Context, remaining: Int) {
         if (!com.tabslify.tabs.focusguard.data.FocusGuardConfig.notificationsEnabled) return
         ensureChannels(context)
+        val reminderBase = Intent(context, MainActivity::class.java)
+        reminderBase.setPackage(context.packageName)
         val contentIntent = PendingIntent.getActivity(
-            context, 9503, Intent(context, MainActivity::class.java),
+            context, 9503, reminderBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
