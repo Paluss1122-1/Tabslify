@@ -38,20 +38,22 @@ fun showSimpleNotificationExtern(
         .setSilent(silent)
 
     if (onClick == "requestIgnoreBatteryOptimizations") {
+        val batteryBase = Intent(context, QuietHoursNotificationService::class.java)
+        batteryBase.action = "requestIgnoreBatteryOptimizations"
+        batteryBase.setPackage(context.packageName)
         val intent = PendingIntent.getService(
             context, 70000,
-            Intent(context, QuietHoursNotificationService::class.java).apply {
-                action = "requestIgnoreBatteryOptimizations"
-            },
+            batteryBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         notification.setContentIntent(intent)
     } else if (onClick != null) {
+        val clickBase = Intent(context, MediaPlayerService::class.java)
+        clickBase.action = onClick
+        clickBase.setPackage(context.packageName)
         val intent = PendingIntent.getService(
             context, 70000,
-            Intent(context, MediaPlayerService::class.java).apply {
-                action = onClick
-            },
+            clickBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         notification.setContentIntent(intent)
