@@ -492,9 +492,10 @@ class WhatsAppNotificationListener : NotificationListenerService() {
             }
         }
 
-        val intent = Intent(this, BlockedNotificationReceiver::class.java)
+        val alarmBase = Intent(this, BlockedNotificationReceiver::class.java)
+        alarmBase.setPackage(packageName)
         val pendingIntent = android.app.PendingIntent.getBroadcast(
-            this, 0, intent,
+            this, 0, alarmBase,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -571,9 +572,10 @@ class BlockedNotificationReceiver : android.content.BroadcastReceiver() {
             set(java.util.Calendar.MILLISECOND, 0)
         }
 
-        val intent = Intent(context, BlockedNotificationReceiver::class.java)
+        val rescheduleBase = Intent(context, BlockedNotificationReceiver::class.java)
+        rescheduleBase.setPackage(context.packageName)
         val pendingIntent = android.app.PendingIntent.getBroadcast(
-            context, 0, intent,
+            context, 0, rescheduleBase,
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
