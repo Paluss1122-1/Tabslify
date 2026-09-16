@@ -113,11 +113,12 @@ private fun scheduleWithAlarmManager(
 
         handler.removeCallbacks(checkRunnable)
 
-        val intent = Intent(context, QuietHoursAlarmReceiver::class.java)
+        val alarmBase = Intent(context, QuietHoursAlarmReceiver::class.java)
+        alarmBase.setPackage(context.packageName)
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             ALARM_REQUEST_CODE,
-            intent,
+            alarmBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -260,24 +261,23 @@ fun createNotificationChannel(context: Context) {
 
 @SuppressLint("LaunchActivityFromNotification")
 fun createNotification(isQuietHours: Boolean, context: Context): Notification {
-    val deleteIntent = Intent(ACTION_NOTIFICATION_DISMISSED).apply {
-        putExtra("notification_id", NOTIFICATION_ID)
-        `package` = context.packageName
-    }
+    val deleteBase = Intent(ACTION_NOTIFICATION_DISMISSED)
+    deleteBase.putExtra("notification_id", NOTIFICATION_ID)
+    deleteBase.setPackage(context.packageName)
     val deletePendingIntent = PendingIntent.getBroadcast(
         context,
         999,
-        deleteIntent,
+        deleteBase,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    val contentIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-        action = ACTION_CONTENT_INTENT
-    }
+    val contentBase = Intent(context, QuietHoursNotificationService::class.java)
+    contentBase.action = ACTION_CONTENT_INTENT
+    contentBase.setPackage(context.packageName)
     val contentPendingIntent = PendingIntent.getService(
         context,
         1002,
-        contentIntent,
+        contentBase,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
@@ -285,14 +285,13 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         .setLabel("Befehl eingeben...")
         .build()
 
-    val commandIntent = Intent(ACTION_EXECUTE_COMMAND).apply {
-        `package` = context.packageName
-    }
+    val commandBase = Intent(ACTION_EXECUTE_COMMAND)
+    commandBase.setPackage(context.packageName)
 
     val commandPendingIntent = PendingIntent.getBroadcast(
         context,
         200,
-        commandIntent,
+        commandBase,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
     )
 
@@ -331,7 +330,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
             context,
             1001,
             settingsIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_IMMUTABLE
         )
 
         builder.addAction(
@@ -348,12 +347,11 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
             .setLabel("Endzeit (0-23)")
             .build()
 
-        val endIntent = Intent(ACTION_CHANGE_END).apply {
-            `package` = context.packageName
-        }
+        val endBase = Intent(ACTION_CHANGE_END)
+        endBase.setPackage(context.packageName)
 
         val endPending = PendingIntent.getBroadcast(
-            context, 101, endIntent,
+            context, 101, endBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
@@ -373,11 +371,11 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
     }
 
     if (prvt()) {
-        val syncIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_SYNC_LAPTOP
-        }
+        val syncBase = Intent(context, QuietHoursNotificationService::class.java)
+        syncBase.action = ACTION_SYNC_LAPTOP
+        syncBase.setPackage(context.packageName)
         val syncPendingIntent = PendingIntent.getService(
-            context, 0, syncIntent,
+            context, 0, syncBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         builder.addAction(
