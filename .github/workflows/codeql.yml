@@ -194,7 +194,14 @@ jobs:
         # Compile the debug variant only. Release signing and the local.properties
         # secrets are not needed for a debug compile; missing BuildConfig values
         # simply render as the string "null", which compiles fine.
+        # --no-build-cache --rerun-tasks are REQUIRED here, not optional:
+        # the CodeQL tracer must OBSERVE real compiler invocations. This
+        # self-hosted runner shares GRADLE_USER_HOME with local builds, so
+        # cache hits or up-to-date tasks would restore outputs without ever
+        # running kotlinc/javac -> "no source code seen during build" (exit 32).
+        # Local builds are unaffected (their caching lives in gradle.properties).
         ./gradlew --no-daemon --stacktrace \
+          --no-build-cache --rerun-tasks \
           -I codeql-kotlin-init.gradle.kts \
           :app:compileDebugSources \
           :extern_accessibily:compileDebugSources
