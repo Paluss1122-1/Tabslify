@@ -203,32 +203,32 @@ private fun showVoiceNotePlayerNotification(file: File, isPlaying: Boolean, cont
         val fileDate = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
             .format(Date(file.lastModified()))
 
-        val prevIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_PREV_VOICE_NOTE
-        }
+        val prevBase = Intent(context, QuietHoursNotificationService::class.java)
+        prevBase.action = ACTION_PREV_VOICE_NOTE
+        prevBase.setPackage(context.packageName)
         val prevPendingIntent = PendingIntent.getService(
-            context, 41, prevIntent,
+            context, 41, prevBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val playStopIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            if (isPlaying) {
-                action = ACTION_STOP_VOICE_NOTE
-            } else {
-                action = ACTION_PLAY_VOICE_NOTE
-                putExtra(EXTRA_SENDER_FOR_VOICE, currentSenderForVoiceNote)
-            }
+        val playStopBase = Intent(context, QuietHoursNotificationService::class.java)
+        if (isPlaying) {
+            playStopBase.action = ACTION_STOP_VOICE_NOTE
+        } else {
+            playStopBase.action = ACTION_PLAY_VOICE_NOTE
+            playStopBase.putExtra(EXTRA_SENDER_FOR_VOICE, currentSenderForVoiceNote)
         }
+        playStopBase.setPackage(context.packageName)
         val playStopPendingIntent = PendingIntent.getService(
-            context, 42, playStopIntent,
+            context, 42, playStopBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val nextIntent = Intent(context, QuietHoursNotificationService::class.java).apply {
-            action = ACTION_NEXT_VOICE_NOTE
-        }
+        val nextBase = Intent(context, QuietHoursNotificationService::class.java)
+        nextBase.action = ACTION_NEXT_VOICE_NOTE
+        nextBase.setPackage(context.packageName)
         val nextPendingIntent = PendingIntent.getService(
-            context, 43, nextIntent,
+            context, 43, nextBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
