@@ -36,20 +36,20 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             val account = remoteMessage.data["account"]
             val uid = remoteMessage.data["uid"]
 
-            val intent = Intent(applicationContext, MainActivity::class.java).apply {
-                action = Intent.ACTION_VIEW
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("target", "gmail")
-                if (account != null && uid != null) {
-                    putExtra("email_account", account)
-                    putExtra("email_uid", uid)
-                }
+            val intentBase = Intent(applicationContext, MainActivity::class.java)
+            intentBase.action = Intent.ACTION_VIEW
+            intentBase.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            intentBase.putExtra("target", "gmail")
+            if (account != null && uid != null) {
+                intentBase.putExtra("email_account", account)
+                intentBase.putExtra("email_uid", uid)
             }
+            intentBase.setPackage(applicationContext.packageName)
             val pendingIntent = PendingIntent.getActivity(
                 applicationContext,
                 System.currentTimeMillis().toInt(),
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                intentBase,
+                PendingIntent.FLAG_IMMUTABLE
             )
             val notification = NotificationCompat.Builder(applicationContext, "show_simple_not_channel")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
