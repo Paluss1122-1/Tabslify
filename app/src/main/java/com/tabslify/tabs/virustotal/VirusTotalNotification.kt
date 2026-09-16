@@ -24,18 +24,18 @@ fun sendVirusTotalScanNotification(context: Context, job: VirusTotalScanJob) {
         else -> return
     }
 
-    val intent = Intent(context, MainActivity::class.java).apply {
-        action = Intent.ACTION_VIEW
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        putExtra("target", "virustotal")
-        putExtra("vt_report_id", job.id)
-    }
+    val intentBase = Intent(context, MainActivity::class.java)
+    intentBase.action = Intent.ACTION_VIEW
+    intentBase.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+    intentBase.putExtra("target", "virustotal")
+    intentBase.putExtra("vt_report_id", job.id)
+    intentBase.setPackage(context.packageName)
 
     val pendingIntent = PendingIntent.getActivity(
         context,
         job.id.hashCode(),
-        intent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        intentBase,
+        PendingIntent.FLAG_IMMUTABLE
     )
 
     val notification = NotificationCompat.Builder(context, VIRUSTOTAL_CHANNEL_ID)
