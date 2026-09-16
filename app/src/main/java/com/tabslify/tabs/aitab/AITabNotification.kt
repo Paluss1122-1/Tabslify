@@ -24,17 +24,17 @@ fun sendAITabBackgroundNotification(
 
     if (!canNotify(context)) return
 
-    val intent = Intent(context, MainActivity::class.java).apply {
-        action = Intent.ACTION_VIEW
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        putExtra("target", "aitab")
-    }
+    val intentBase = Intent(context, MainActivity::class.java)
+    intentBase.action = Intent.ACTION_VIEW
+    intentBase.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+    intentBase.putExtra("target", "aitab")
+    intentBase.setPackage(context.packageName)
 
     val pendingIntent = PendingIntent.getActivity(
         context,
         System.currentTimeMillis().toInt(),
-        intent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        intentBase,
+        PendingIntent.FLAG_IMMUTABLE
     )
 
     val notification = NotificationCompat.Builder(context, "ai_tab_notification_channel")
