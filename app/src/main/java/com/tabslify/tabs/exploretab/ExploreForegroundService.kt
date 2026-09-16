@@ -38,6 +38,7 @@ class ExploreForegroundService : Service() {
     private fun buildNotification(): Notification {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            setPackage(packageName)
         }
         val launchPendingIntent = PendingIntent.getActivity(
             this,
