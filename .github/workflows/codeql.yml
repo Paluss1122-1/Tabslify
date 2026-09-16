@@ -18,6 +18,7 @@ on:
     branches: [ "master" ]
   schedule:
     - cron: '15 14 * * 0'
+  workflow_dispatch:
 
 jobs:
   # Checks whether your self-hosted runner is online. Runs on a GitHub-hosted
