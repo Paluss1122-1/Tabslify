@@ -322,22 +322,27 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         builder
             .setContentTitle("🔥 Ready")
 
-        val settingsIntent = Intent(Settings.ACTION_SETTINGS).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val settingsTarget = context.packageManager.resolveActivity(
+            Intent(Settings.ACTION_SETTINGS),
+            android.content.pm.PackageManager.ResolveInfoFlags.of(0)
+        )?.activityInfo
+        if (settingsTarget != null) {
+            val settingsBase = Intent(Settings.ACTION_SETTINGS)
+            settingsBase.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            settingsBase.setClassName(settingsTarget.packageName, settingsTarget.name)
+            val settingsPendingIntent = PendingIntent.getActivity(
+                context,
+                1001,
+                settingsBase,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+
+            builder.addAction(
+                android.R.drawable.ic_menu_preferences,
+                "Settings",
+                settingsPendingIntent
+            )
         }
-
-        val settingsPendingIntent = PendingIntent.getActivity(
-            context,
-            1001,
-            settingsIntent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
-
-        builder.addAction(
-            android.R.drawable.ic_menu_preferences,
-            "Settings",
-            settingsPendingIntent
-        )
     } else {
         val prefs = context.getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
         val currentStart = prefs.getString("quiet_hours_end", "21") ?: "21"

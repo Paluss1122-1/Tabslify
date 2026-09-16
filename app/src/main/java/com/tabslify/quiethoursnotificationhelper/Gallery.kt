@@ -525,14 +525,21 @@ private fun showGalleryImage(index: Int, context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val openIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(imageUri, "image/*")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        val viewProbe = Intent(Intent.ACTION_VIEW)
+        viewProbe.setDataAndType(imageUri, "image/*")
+        val viewer = context.packageManager.resolveActivity(
+            viewProbe, PackageManager.ResolveInfoFlags.of(0)
+        )?.activityInfo
+        val openPendingIntent = viewer?.let {
+            val viewBase = Intent(Intent.ACTION_VIEW)
+            viewBase.setDataAndType(imageUri, "image/*")
+            viewBase.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            viewBase.setClassName(it.packageName, it.name)
+            PendingIntent.getActivity(
+                context, 74, viewBase,
+                PendingIntent.FLAG_IMMUTABLE
+            )
         }
-        val openPendingIntent = PendingIntent.getActivity(
-            context, 74, openIntent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
 
         val notification = NotificationCompat.Builder(context, GALLERY_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
