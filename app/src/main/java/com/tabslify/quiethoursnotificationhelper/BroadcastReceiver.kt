@@ -219,13 +219,13 @@ class FinishedPdDownload : BroadcastReceiver() {
                         ?: PodcastShowManager.createShow(showName)
                     PodcastShowManager.assignPattern(safeTitle.lowercase(), show.name)
                     Toast.makeText(context, "✓ Heruntergeladen", Toast.LENGTH_SHORT).show()
-                    val openIntent = Intent(context, MediaPlayerService::class.java).apply {
-                        action = ACTION_PODCAST_PLAY_SPECIFIED
-                        putExtra("safeTitle", safeTitle)
-                    }
+                    val openBase = Intent(context, MediaPlayerService::class.java)
+                    openBase.action = ACTION_PODCAST_PLAY_SPECIFIED
+                    openBase.putExtra("safeTitle", safeTitle)
+                    openBase.setPackage(context.packageName)
                     val pendingIntent = PendingIntent.getForegroundService(
-                        context, downloadId.toInt(), openIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        context, downloadId.toInt(), openBase,
+                        PendingIntent.FLAG_IMMUTABLE
                     )
 
                     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
