@@ -192,15 +192,14 @@ class ChatService : Service() {
             .setLabel("Nachricht schreiben...")
             .build()
 
-        val replyIntent = Intent(ACTION_REPLY).apply {
-            putExtra(KEY_NOTIFICATION_ID, Config.CHAT_SERVICE)
-            `package` = packageName
-        }
+        val replyBase = Intent(ACTION_REPLY)
+        replyBase.putExtra(KEY_NOTIFICATION_ID, Config.CHAT_SERVICE)
+        replyBase.setPackage(packageName)
 
         val replyPendingIntent = PendingIntent.getBroadcast(
             this,
             Config.CHAT_SERVICE,
-            replyIntent,
+            replyBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
@@ -213,14 +212,13 @@ class ChatService : Service() {
             .setShowsUserInterface(false)
             .build()
 
-        val historyIntent = Intent(ACTION_SHOW_HISTORY).apply {
-            `package` = packageName
-        }
+        val historyBase = Intent(ACTION_SHOW_HISTORY)
+        historyBase.setPackage(packageName)
 
         val historyPendingIntent = PendingIntent.getBroadcast(
             this,
             9999,
-            historyIntent,
+            historyBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
@@ -230,14 +228,14 @@ class ChatService : Service() {
             historyPendingIntent
         ).build()
 
-        val deleteIntent = Intent(this, ChatService::class.java).apply {
-            action = "ACTION_NOTIFICATION_DELETED"
-        }
+        val deleteBase = Intent(this, ChatService::class.java)
+        deleteBase.action = "ACTION_NOTIFICATION_DELETED"
+        deleteBase.setPackage(packageName)
 
         val deletePendingIntent = PendingIntent.getService(
             this,
             999,
-            deleteIntent,
+            deleteBase,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -396,15 +394,14 @@ class ChatService : Service() {
                 .setLabel("Antwort")
                 .build()
 
-            val replyIntent = Intent(ACTION_REPLY).apply {
-                putExtra(KEY_NOTIFICATION_ID, Config.cms())
-                `package` = packageName
-            }
+            val replyBase = Intent(ACTION_REPLY)
+            replyBase.putExtra(KEY_NOTIFICATION_ID, Config.cms())
+            replyBase.setPackage(packageName)
 
             val replyPendingIntent = PendingIntent.getBroadcast(
                 this,
                 Config.cms(),
-                replyIntent,
+                replyBase,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             )
 
