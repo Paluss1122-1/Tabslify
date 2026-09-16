@@ -285,9 +285,11 @@ class ChargingTrackerService : Service() {
                 .build()
         )
 
+        val allowBase = Intent(ACTION_ALLOW)
+        allowBase.setPackage(packageName)
         val allowPi = PendingIntent.getBroadcast(
-            this, 0, Intent(ACTION_ALLOW),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            this, 0, allowBase,
+            PendingIntent.FLAG_IMMUTABLE
         )
         tNotify(
             this, NOTIF_PERMISSION_ID, NotificationCompat.Builder(this, "charging_tracker")
