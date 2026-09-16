@@ -20,14 +20,37 @@ on:
     - cron: '15 14 * * 0'
 
 jobs:
+  # Checks whether your self-hosted runner is online. Runs on a GitHub-hosted
+  # runner itself (it only calls the GitHub API, never touches repo code), so
+  # it's safe to run for every event including PRs from forks.
+  determine-runner:
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.pick.outputs.use-runner }}
+    steps:
+    - name: Check self-hosted runner availability
+      id: pick
+      uses: mikehardy/runner-fallback-action@v1
+      with:
+        primary-runner: "self-hosted,Linux,X64"
+        fallback-runner: "ubuntu-latest"
+        github-token: ${{ secrets.RUNNER_CHECK_TOKEN }}
+
   analyze:
+    needs: determine-runner
     name: Analyze (${{ matrix.language }})
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
     #   - https://gh.io/using-larger-runners (GitHub.com only)
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    # push/schedule (your own commits) try your PC first via the self-hosted
+    # runner - Gradle cache, Android SDK etc. stay warm between runs - and fall
+    # back to ubuntu-latest automatically if it's offline. pull_request always
+    # stays on a GitHub-hosted runner so code from PRs (e.g. forks, if this
+    # repo is ever public) never executes on your machine, self-hosted online
+    # or not.
+    runs-on: ${{ (github.event_name == 'pull_request' && 'ubuntu-latest') || (matrix.language == 'swift' && 'macos-latest') || fromJson(needs.determine-runner.outputs.runner) }}
     permissions:
       # required for all workflows
       security-events: write
@@ -58,7 +81,10 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Set up JDK 17
-      if: matrix.language == 'java-kotlin'
+      # Only needed on the GitHub-hosted fallback - your self-hosted machine
+      # already has a JDK (Android Studio's bundled one / whatever's on your
+      # PATH) and gradlew will just use that.
+      if: matrix.language == 'java-kotlin' && runner.environment == 'github-hosted'
       uses: actions/setup-java@v6
       with:
         distribution: temurin
