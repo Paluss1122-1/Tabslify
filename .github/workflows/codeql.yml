@@ -83,6 +83,39 @@ jobs:
     # to build your code.
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
+    - name: Pin Kotlin to a CodeQL-supported version
+      if: matrix.build-mode == 'manual'
+      shell: bash
+      run: |
+        # The project's real Kotlin version (2.4.20) is newer than the CodeQL
+        # extractor currently accepts. This init script forces every
+        # org.jetbrains.kotlin:* artifact - including the Kotlin Gradle plugin
+        # and the build-tools-api compiler it delegates to - down to 2.4.10
+        # (the newest version CodeQL is confirmed to support) for this build only.
+        # The repository's own gradle/libs.versions.toml is untouched, so normal
+        # (non-CodeQL) builds keep using 2.4.20.
+        # TODO: remove this step once CodeQL supports Kotlin 2.4.20+.
+        cat > codeql-kotlin-init.gradle.kts <<'KTS'
+        allprojects {
+            buildscript {
+                configurations.all {
+                    resolutionStrategy.eachDependency {
+                        if (requested.group == "org.jetbrains.kotlin") {
+                            useVersion("2.4.10")
+                        }
+                    }
+                }
+            }
+            configurations.all {
+                resolutionStrategy.eachDependency {
+                    if (requested.group == "org.jetbrains.kotlin") {
+                        useVersion("2.4.10")
+                    }
+                }
+            }
+        }
+        KTS
+
     - name: Run manual build steps
       if: matrix.build-mode == 'manual'
       shell: bash
@@ -126,6 +159,7 @@ jobs:
         # secrets are not needed for a debug compile; missing BuildConfig values
         # simply render as the string "null", which compiles fine.
         ./gradlew --no-daemon --stacktrace \
+          -I codeql-kotlin-init.gradle.kts \
           :app:compileDebugSources \
           :extern_accessibily:compileDebugSources
 
