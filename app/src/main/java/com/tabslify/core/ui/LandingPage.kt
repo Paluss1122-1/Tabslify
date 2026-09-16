@@ -97,6 +97,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -175,10 +176,12 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.storage.Storage
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
@@ -1068,6 +1071,17 @@ fun TabCard(
     }
 }
 
+private fun isUsageStatsGranted(context: Context): Boolean {
+    val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val now = System.currentTimeMillis()
+    val stats = try {
+        usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 60_000, now)
+    } catch (_: SecurityException) {
+        return false
+    }
+    return stats != null && stats.isNotEmpty()
+}
+
 fun isPermissionGranted(context: Context, key: String): Boolean {
     fun granted(p: String) =
         ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
@@ -1087,12 +1101,7 @@ fun isPermissionGranted(context: Context, key: String): Boolean {
 
         "SYSTEM_ALERT_WINDOW" -> Settings.canDrawOverlays(context)
 
-        "PACKAGE_USAGE_STATS" -> {
-            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val now = System.currentTimeMillis()
-            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 60_000, now)
-            stats != null && stats.isNotEmpty()
-        }
+        "PACKAGE_USAGE_STATS" -> isUsageStatsGranted(context)
 
         "FOREGROUND_SERVICE" -> granted(Manifest.permission.FOREGROUND_SERVICE)
 
@@ -1138,6 +1147,93 @@ fun isPermissionGranted(context: Context, key: String): Boolean {
         "ACCESS_NETWORK_STATE" -> granted(Manifest.permission.ACCESS_NETWORK_STATE)
 
         else -> false
+    }
+}
+
+@Composable
+private fun PermissionButton(
+    txt: String,
+    isSelected: Boolean,
+    permRefreshKey: Int,
+    usageStatsGranted: Boolean?,
+    buttonShape: RoundedCornerShape,
+    borderBrush: Brush,
+    onShowDetails: () -> Unit,
+    onGrant: () -> Unit
+) {
+    val context = LocalContext.current
+    val syncGranted = remember(permRefreshKey, txt) {
+        if (txt == "PACKAGE_USAGE_STATS") null else isPermissionGranted(context, txt)
+    }
+    val granted = syncGranted ?: usageStatsGranted ?: false
+    val requestable = remember(txt) { Config.isPermissionRequestable(txt) }
+
+    Button(
+        onClick = onShowDetails,
+        shape = buttonShape,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isSelected) APP_COLOR.copy(
+                alpha = 0.3f
+            ) else Color.Transparent
+        ),
+        modifier = Modifier
+            .padding(vertical = 5.dp)
+            .fillMaxWidth()
+            .clip(buttonShape)
+            .background(if (isSelected) APP_COLOR.copy(alpha = 0.3f) else APP_COLOR)
+            .animateContentSize()
+            .border(
+                BorderStroke(1.dp, borderBrush),
+                buttonShape
+            )
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Text(txt, fontSize = 13.sp, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(6.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(100))
+                        .background(
+                            if (granted) Color(0xFF00C853).copy(alpha = 0.22f)
+                            else Color.White.copy(alpha = 0.10f)
+                        )
+                        .padding(horizontal = 9.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        if (granted) "● Erteilt" else "○ Nicht erteilt",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (granted) Color(0xFF69F0AE)
+                        else Color.White.copy(alpha = 0.55f)
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                if (!granted && requestable) {
+                    TextButton(
+                        onClick = onGrant,
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.erteilen),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    contentDescription = stringResource(R.string.open_information),
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
     }
 }
 
@@ -1330,176 +1426,87 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         var headerHeightDp by remember { mutableStateOf(0.dp) }
         val density = LocalDensity.current
 
-        run {
-            @Composable
-            fun PermissionButton(txt: String) {
-                val shape = RoundedCornerShape(22.dp)
-                val isSelected = selectedPermission == txt
-
-                Button(
-                    onClick = {
-                        selectedPermission = txt
-                        titleDialog = txt
-                        usagesDialog = permissionUsages[txt] ?: listOf(keineAngabenHinterlegt)
-                    },
-                    shape = shape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSelected) APP_COLOR.copy(
-                            alpha = 0.3f
-                        ) else Color.Transparent
-                    ),
-                    modifier = Modifier
-                        .padding(vertical = 5.dp)
-                        .fillMaxWidth()
-                        .clip(shape)
-                        .background(if (isSelected) APP_COLOR.copy(alpha = 0.3f) else APP_COLOR)
-                        .animateContentSize()
-                        .border(
-                            BorderStroke(
-                                1.dp,
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        Color(0xFFFF368A),
-                                        Color(0xFF7C4DFF)
-                                    )
-                                )
-                            ),
-                            shape
-                        )
-                ) {
-                    val granted = remember(permRefreshKey, txt) {
-                        isPermissionGranted(context, txt)
-                    }
-                    Column(Modifier.fillMaxWidth()) {
-                        Text(txt, fontSize = 13.sp, modifier = Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(6.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(100))
-                                    .background(
-                                        if (granted) Color(0xFF00C853).copy(alpha = 0.22f)
-                                        else Color.White.copy(alpha = 0.10f)
-                                    )
-                                    .padding(horizontal = 9.dp, vertical = 3.dp)
-                            ) {
-                                Text(
-                                    if (granted) "● Erteilt" else "○ Nicht erteilt",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (granted) Color(0xFF69F0AE)
-                                    else Color.White.copy(alpha = 0.55f)
-                                )
-                            }
-                            Spacer(Modifier.weight(1f))
-                            if (!granted && Config.isPermissionRequestable(txt)) {
-                                TextButton(
-                                    onClick = { Config.requestPermissionForKey(context, txt, permissionLauncher) },
-                                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                                    modifier = Modifier.padding(end = 4.dp)
-                                ) {
-                                    Text(
-                                        stringResource(R.string.erteilen),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowForwardIos,
-                                contentDescription = stringResource(R.string.open_information),
-                                tint = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            val allPermissionKeys = remember(prvt()) {
-                buildList {
-                    add("READ_MEDIA_AUDIO")
-                    add("POST_NOTIFICATIONS")
-                    add("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
-                    add("ACCESS_BACKGROUND_LOCATION")
-                    add("ACTIVITY_RECOGNITION")
-                    add("SYSTEM_ALERT_WINDOW")
-                    add("PACKAGE_USAGE_STATS")
-                    add("FOREGROUND_SERVICE")
-                    add("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
-                    add("READ_CONTACTS / WRITE_CONTACTS")
-                    add("CAMERA")
-                    add("RECEIVE_BOOT_COMPLETED")
-                    add("RECORD_AUDIO")
-                    add("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
-                    if (prvt()) {
-                        add("BLUETOOTH_CONNECT")
-                        add("READ_PHONE_STATE / READ_BASIC_PHONE_STATE")
-                        add("READ_SMS")
-                        add("MANAGE_EXTERNAL_STORAGE")
-                        add("ACCESS_NOTIFICATION_POLICY")
-                        add("ACCESS_SUPERUSER")
-                        add("SET_ALARM")
-                        add("ACCESS_WIFI_STATE")
-                        add("ACCESS_NETWORK_STATE")
-                    }
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState)
-                    .verticalScroll(rememberScrollState())
-                    .then(
-                        if (!onboarding) Modifier.windowInsetsPadding(WindowInsets.navigationBars)
-                        else Modifier
-                    )
-                    .padding(horizontal = 15.dp)
-            ) {
-                Spacer(Modifier.height(headerHeightDp))
-
-                Button(
-                    onClick = {
-                        Config.requestAllRuntimePermissions(allPermissionKeys, permissionLauncher)
-                    },
-                    shape = RoundedCornerShape(22.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = APP_COLOR),
-                    modifier = Modifier
-                        .padding(bottom = 10.dp)
-                        .fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.alle_berechtigungen_anfragen), fontWeight = FontWeight.Bold)
-                }
-
-                PermissionButton("READ_MEDIA_AUDIO")
-                PermissionButton("POST_NOTIFICATIONS")
-                PermissionButton("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
-                PermissionButton("ACCESS_BACKGROUND_LOCATION")
-                PermissionButton("ACTIVITY_RECOGNITION")
-                PermissionButton("SYSTEM_ALERT_WINDOW")
-                PermissionButton("PACKAGE_USAGE_STATS")
-                PermissionButton("FOREGROUND_SERVICE")
-                PermissionButton("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
-                PermissionButton("READ_CONTACTS / WRITE_CONTACTS")
-                PermissionButton("CAMERA")
-                PermissionButton("RECEIVE_BOOT_COMPLETED")
-                PermissionButton("RECORD_AUDIO")
-                PermissionButton("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
+        val usageStatsCache = remember { mutableStateOf<Boolean?>(null) }
+        val usageStatsGranted by produceState<Boolean?>(initialValue = usageStatsCache.value, permRefreshKey) {
+            value = withContext(Dispatchers.IO) { isUsageStatsGranted(context.applicationContext) }
+            usageStatsCache.value = value
+        }
+        val permissionButtonShape = remember { RoundedCornerShape(22.dp) }
+        val permissionBorderBrush = remember {
+            Brush.linearGradient(colors = listOf(Color(0xFFFF368A), Color(0xFF7C4DFF)))
+        }
+        val allPermissionKeys = remember {
+            buildList {
+                add("READ_MEDIA_AUDIO")
+                add("POST_NOTIFICATIONS")
+                add("ACCESS_COARSE_LOCATION / ACCESS_FINE_LOCATION")
+                add("ACCESS_BACKGROUND_LOCATION")
+                add("ACTIVITY_RECOGNITION")
+                add("SYSTEM_ALERT_WINDOW")
+                add("PACKAGE_USAGE_STATS")
+                add("FOREGROUND_SERVICE")
+                add("READ_MEDIA_IMAGES / READ_MEDIA_VIDEO")
+                add("READ_CONTACTS / WRITE_CONTACTS")
+                add("CAMERA")
+                add("RECEIVE_BOOT_COMPLETED")
+                add("RECORD_AUDIO")
+                add("REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")
                 if (prvt()) {
-                    PermissionButton("BLUETOOTH_CONNECT")
-                    PermissionButton("READ_PHONE_STATE / READ_BASIC_PHONE_STATE")
-                    PermissionButton("READ_SMS")
-                    PermissionButton("MANAGE_EXTERNAL_STORAGE")
-                    PermissionButton("ACCESS_NOTIFICATION_POLICY")
-                    PermissionButton("ACCESS_SUPERUSER")
-                    PermissionButton("SET_ALARM")
-                    PermissionButton("ACCESS_WIFI_STATE")
-                    PermissionButton("ACCESS_NETWORK_STATE")
+                    add("BLUETOOTH_CONNECT")
+                    add("READ_PHONE_STATE / READ_BASIC_PHONE_STATE")
+                    add("READ_SMS")
+                    add("MANAGE_EXTERNAL_STORAGE")
+                    add("ACCESS_NOTIFICATION_POLICY")
+                    add("ACCESS_SUPERUSER")
+                    add("SET_ALARM")
+                    add("ACCESS_WIFI_STATE")
+                    add("ACCESS_NETWORK_STATE")
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState)
+                .verticalScroll(rememberScrollState())
+                .then(
+                    if (!onboarding) Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+                    else Modifier
+                )
+                .padding(horizontal = 15.dp)
+        ) {
+            Spacer(Modifier.height(headerHeightDp))
+
+            Button(
+                onClick = {
+                    Config.requestAllRuntimePermissions(allPermissionKeys, permissionLauncher)
+                },
+                shape = RoundedCornerShape(22.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = APP_COLOR),
+                modifier = Modifier
+                    .padding(bottom = 10.dp)
+                    .fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.alle_berechtigungen_anfragen), fontWeight = FontWeight.Bold)
+            }
+
+            allPermissionKeys.forEach { permissionKey ->
+                key(permissionKey) {
+                    PermissionButton(
+                        txt = permissionKey,
+                        isSelected = selectedPermission == permissionKey,
+                        permRefreshKey = permRefreshKey,
+                        usageStatsGranted = usageStatsGranted,
+                        buttonShape = permissionButtonShape,
+                        borderBrush = permissionBorderBrush,
+                        onShowDetails = {
+                            selectedPermission = permissionKey
+                            titleDialog = permissionKey
+                            usagesDialog = permissionUsages[permissionKey] ?: listOf(keineAngabenHinterlegt)
+                        },
+                        onGrant = { Config.requestPermissionForKey(context, permissionKey, permissionLauncher) }
+                    )
                 }
             }
         }
@@ -1508,7 +1515,8 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
             modifier = Modifier
                 .fillMaxWidth()
                 .onGloballyPositioned {
-                    headerHeightDp = with(density) { it.size.height.toDp() }
+                    val newHeight = with(density) { it.size.height.toDp() }
+                    if (newHeight != headerHeightDp) headerHeightDp = newHeight
                 }
         ) {
             Box(
@@ -2079,73 +2087,75 @@ fun SettingsFrame(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                if (Config.masterPassword.isBlank()) {
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                NeonBox(
-                    modifier = Modifier.fillMaxWidth(),
-                    neonColors = listOf(Color(0xFF00FFAA), Color(0xFFFFB300)),
-                    backgroundAlpha = 0.15f
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
-                        Text(
-                            text = stringResource(R.string.cloud_backup_title),
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = when {
-                                Config.masterPassword.isBlank() ->
-                                    stringResource(R.string.cloud_backup_no_master)
-                                backupLastMs > 0L ->
-                                    stringResource(R.string.cloud_backup_last) + " " +
-                                        android.text.format.DateUtils
-                                            .getRelativeTimeSpanString(backupLastMs)
-                                else -> stringResource(R.string.cloud_backup_never)
-                            },
-                            color = Color.White.copy(alpha = 0.6f),
-                            fontSize = 12.sp
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    if (backupBusy) return@Button
-                                    backupBusy = true
-                                    scope.launch {
-                                        val outcome =
-                                            PrefsBackup.backupNow(context, force = true)
-                                        if (outcome == BackupOutcome.DONE) {
-                                            backupLastMs =
-                                                prefs.getLong("last_prefs_backup_ms", 0L)
+                    NeonBox(
+                        modifier = Modifier.fillMaxWidth(),
+                        neonColors = listOf(Color(0xFF00FFAA), Color(0xFFFFB300)),
+                        backgroundAlpha = 0.15f
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+                            Text(
+                                text = stringResource(R.string.cloud_backup_title),
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = when {
+                                    Config.masterPassword.isBlank() ->
+                                        stringResource(R.string.cloud_backup_no_master)
+                                    backupLastMs > 0L ->
+                                        stringResource(R.string.cloud_backup_last) + " " +
+                                                android.text.format.DateUtils
+                                                    .getRelativeTimeSpanString(backupLastMs)
+                                    else -> stringResource(R.string.cloud_backup_never)
+                                },
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 12.sp
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (backupBusy) return@Button
+                                        backupBusy = true
+                                        scope.launch {
+                                            val outcome =
+                                                PrefsBackup.backupNow(context, force = true)
+                                            if (outcome == BackupOutcome.DONE) {
+                                                backupLastMs =
+                                                    prefs.getLong("last_prefs_backup_ms", 0L)
+                                            }
+                                            toast(context, outcomeMessage(outcome))
+                                            backupBusy = false
                                         }
-                                        toast(context, outcomeMessage(outcome))
-                                        backupBusy = false
-                                    }
-                                },
-                                enabled = !backupBusy && Config.masterPassword.isNotBlank(),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(stringResource(R.string.cloud_backup_now))
-                            }
-                            Button(
-                                onClick = {
-                                    if (backupBusy) return@Button
-                                    backupBusy = true
-                                    scope.launch {
-                                        backupList = PrefsBackup.listBackups()
-                                        backupBusy = false
-                                        showRestoreList = true
-                                    }
-                                },
-                                enabled = !backupBusy && Config.masterPassword.isNotBlank(),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(stringResource(R.string.cloud_backup_restore))
+                                    },
+                                    enabled = !backupBusy && Config.masterPassword.isNotBlank(),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(stringResource(R.string.cloud_backup_now))
+                                }
+                                Button(
+                                    onClick = {
+                                        if (backupBusy) return@Button
+                                        backupBusy = true
+                                        scope.launch {
+                                            backupList = PrefsBackup.listBackups()
+                                            backupBusy = false
+                                            showRestoreList = true
+                                        }
+                                    },
+                                    enabled = !backupBusy && Config.masterPassword.isNotBlank(),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(stringResource(R.string.cloud_backup_restore))
+                                }
                             }
                         }
                     }
