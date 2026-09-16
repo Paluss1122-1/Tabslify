@@ -55,12 +55,12 @@ private fun buildReplyAction(
     notificationId: Int,
     context: Context
 ): NotificationCompat.Action {
+    val replyBase = Intent(ACTION_MESSAGE_SENT)
+    replyBase.putExtra(EXTRA_SENDER, key)
+    replyBase.setPackage(context.packageName)
     val pi = getBroadcast(
         context, notificationId,
-        Intent(ACTION_MESSAGE_SENT).apply {
-            putExtra(EXTRA_SENDER, key)
-            `package` = context.packageName
-        },
+        replyBase,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
     )
     return NotificationCompat.Action.Builder(
@@ -102,12 +102,13 @@ private fun postChatNotification(key: String, context: Context, sourceLabel: Str
                 parts.reversed().forEachIndexed { idx, part ->
                     val partId = notifId + partIndex
                     partIndex++
+                    val markBase = Intent(context, QuietHoursNotificationService::class.java)
+                    markBase.action = ACTION_MARK_PARTS_READ
+                    markBase.putExtra(EXTRA_MESSAGE_ID, msgId)
+                    markBase.setPackage(context.packageName)
                     val markPi = PendingIntent.getService(
                         context, partId + 500000,
-                        Intent(context, QuietHoursNotificationService::class.java).apply {
-                            action = ACTION_MARK_PARTS_READ
-                            putExtra(EXTRA_MESSAGE_ID, msgId)
-                        },
+                        markBase,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                     val partNum = parts.size - idx
