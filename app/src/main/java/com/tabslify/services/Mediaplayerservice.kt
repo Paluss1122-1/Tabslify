@@ -328,11 +328,12 @@ class MediaPlayerService : MediaSessionService() {
             }
 
             completedPodcasts.forEachIndexed { i, (path, name) ->
+                val deleteBase = Intent(context, MediaPlayerService::class.java)
+                deleteBase.action = ACTION_DELETE_SINGLE + path.hashCode()
+                deleteBase.setPackage(context.packageName)
                 val deleteIntent = PendingIntent.getService(
                     context, 70000 + i,
-                    Intent(context, MediaPlayerService::class.java).apply {
-                        action = ACTION_DELETE_SINGLE + path.hashCode()
-                    },
+                    deleteBase,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 val n =
@@ -1209,7 +1210,7 @@ class MediaPlayerService : MediaSessionService() {
                 PendingIntent.getActivity(
                     this, 0,
                     Intent(this, MainActivity::class.java),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    PendingIntent.FLAG_IMMUTABLE
                 )
             )
             .setCallback(object : MediaSession.Callback {
@@ -1812,11 +1813,12 @@ class MediaPlayerService : MediaSessionService() {
             )
         }
         updated.forEachIndexed { i, p ->
+            val selectBase = Intent(this, MediaPlayerService::class.java)
+            selectBase.action = "SELECT_${p.path.hashCode()}"
+            selectBase.setPackage(packageName)
             val pi = PendingIntent.getService(
                 this, 50000 + i,
-                Intent(this, MediaPlayerService::class.java).apply {
-                    action = "SELECT_${p.path.hashCode()}"
-                },
+                selectBase,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val status = when {
@@ -1857,11 +1859,12 @@ class MediaPlayerService : MediaSessionService() {
             showNoCompletedPodcastsNotification(); return
         }
         completed.forEachIndexed { i, p ->
+            val deleteBase = Intent(this, MediaPlayerService::class.java)
+            deleteBase.action = ACTION_DELETE_SINGLE + p.path.hashCode()
+            deleteBase.setPackage(packageName)
             val pi = PendingIntent.getService(
                 this, 70000 + i,
-                Intent(this, MediaPlayerService::class.java).apply {
-                    action = ACTION_DELETE_SINGLE + p.path.hashCode()
-                },
+                deleteBase,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val n = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -1964,11 +1967,16 @@ class MediaPlayerService : MediaSessionService() {
         val isFav =
             active.getOrNull(currentSongIndex)?.let { favoriteSongs.containsKey(it.path) } ?: false
 
-        fun pi(reqCode: Int, action: String) = PendingIntent.getService(
-            this, reqCode,
-            Intent(this, MediaPlayerService::class.java).apply { this.action = action },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        fun pi(reqCode: Int, action: String): PendingIntent {
+            val base = Intent(this, MediaPlayerService::class.java)
+            base.action = action
+            base.setPackage(packageName)
+            return PendingIntent.getService(
+                this, reqCode,
+                base,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
 
         val playlistLabel = when {
             activeAlgorithmicPlaylistId != null ->
@@ -2018,14 +2026,17 @@ class MediaPlayerService : MediaSessionService() {
             ""
         }
 
-        fun pi(reqCode: Int, action: String, extraMs: Int? = null) = PendingIntent.getService(
-            this, reqCode,
-            Intent(this, MediaPlayerService::class.java).apply {
-                this.action = action
-                extraMs?.let { putExtra(EXTRA_FORWARD_MS, it) }
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        fun pi(reqCode: Int, action: String, extraMs: Int? = null): PendingIntent {
+            val base = Intent(this, MediaPlayerService::class.java)
+            base.action = action
+            extraMs?.let { base.putExtra(EXTRA_FORWARD_MS, it) }
+            base.setPackage(packageName)
+            return PendingIntent.getService(
+                this, reqCode,
+                base,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
@@ -2512,21 +2523,21 @@ class MediaPlayerService : MediaSessionService() {
         }
 
         filtered.forEachIndexed { i, pl ->
-            val activateIntent = Intent(this, MediaPlayerService::class.java).apply {
-                action = "ACTIVATE_PL_${pl.id}"
-            }
+            val activateBase = Intent(this, MediaPlayerService::class.java)
+            activateBase.action = "ACTIVATE_PL_${pl.id}"
+            activateBase.setPackage(packageName)
             val activatePi = PendingIntent.getService(
                 this, 80000 + i,
-                activateIntent,
+                activateBase,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val deleteIntent = Intent(this, MediaPlayerService::class.java).apply {
-                action = "DELETE_PL_${pl.id}"
-            }
+            val deleteBase = Intent(this, MediaPlayerService::class.java)
+            deleteBase.action = "DELETE_PL_${pl.id}"
+            deleteBase.setPackage(packageName)
             val deletePi = PendingIntent.getService(
                 this, 81000 + i,
-                deleteIntent,
+                deleteBase,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
