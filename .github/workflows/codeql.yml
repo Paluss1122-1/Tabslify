@@ -31,11 +31,20 @@ jobs:
     steps:
     - name: Check self-hosted runner availability
       id: pick
-      uses: mikehardy/runner-fallback-action@v1
-      with:
-        primary-runner: "self-hosted,Linux,X64"
-        fallback-runner: "ubuntu-latest"
-        github-token: ${{ secrets.RUNNER_CHECK_TOKEN }}
+      env:
+        GH_TOKEN: ${{ secrets.RUNNER_CHECK_TOKEN }}
+      run: |
+        # Same behavior as mikehardy/runner-fallback-action@v1 (repo-level
+        # runners, online check), but as plain gh+jq: no third-party action,
+        # no Node.js 20 deprecation warning. Output stays a JSON label array,
+        # so fromJson() downstream keeps working.
+        JSON=$(gh api "repos/${{ github.repository }}/actions/runners?per_page=100" 2>/dev/null || echo '{"runners":[]}')
+        ONLINE=$(echo "$JSON" | jq '[.runners[] | select(.status == "online" and ((["self-hosted", "Linux", "X64"] - [.labels[].name]) | length == 0))] | length')
+        if [ "$ONLINE" -gt 0 ]; then
+          echo 'use-runner=["self-hosted", "Linux", "X64"]' >> "$GITHUB_OUTPUT"
+        else
+          echo 'use-runner=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+        fi
 
   analyze:
     needs: determine-runner
