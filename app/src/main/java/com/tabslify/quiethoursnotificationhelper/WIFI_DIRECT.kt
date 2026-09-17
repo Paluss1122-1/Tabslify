@@ -26,6 +26,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.Uri
+import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Handler
@@ -162,6 +163,7 @@ private data class Cache(
     var plugged: Boolean = false,
     var mobileData: Boolean? = null,
     var wifi: Boolean? = null,
+    var wifiSsid: String? = null,
     var hotspot: String? = null,
     var bluetoothOn: Boolean? = null,
     var bluetoothConnectedCount: Int? = null,
@@ -2997,6 +2999,17 @@ private fun isWifiConnectedAndActive(context: Context): Boolean {
     }
 }
 
+private fun getWifiSsid(context: Context): String? {
+    return try {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val info = cm.getNetworkCapabilities(cm.activeNetwork)?.transportInfo as? WifiInfo
+        info?.ssid?.removeSurrounding("\"")
+            .takeUnless { it.isNullOrEmpty() || it == WifiInfo.UNKNOWN_SSID }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 @SuppressLint("MissingPermission")
 private fun isHotspotActive(context: Context): Boolean {
     val wifiManager =
@@ -3129,6 +3142,7 @@ private fun sendDeviceInformation(context: Context, intent: Intent? = null) {
     val bluetoothOn = isBluetoothOn(context)
     val bluetoothConnectedCount = connectedBluetoothDevices.size
     val volume = getVolume(context)
+    val wifiSsid = getWifiSsid(context)
 
     val bl = buildString {
         if (intent != null) {
@@ -3154,11 +3168,13 @@ private fun sendDeviceInformation(context: Context, intent: Intent? = null) {
         if (cache.hotspot != hotspot) append("hotspot=$hotspot ")
         if (cache.bluetoothOn != bluetoothOn) append("bluetooth_on=$bluetoothOn ")
         if (cache.bluetoothConnectedCount != bluetoothConnectedCount) append("bluetooth_connected=$bluetoothConnectedCount ")
-        if (cache.volume != volume) append("volume=$volume")
+        if (cache.volume != volume) append("volume=$volume ")
+        if (wifiSsid != null && cache.wifiSsid != wifiSsid) append("wifi_ssid=$wifiSsid")
     }.trim()
 
     cache.mobileData = mobileData
     cache.wifi = wifi
+    cache.wifiSsid = wifiSsid
     cache.hotspot = hotspot
     cache.bluetoothOn = bluetoothOn
     cache.bluetoothConnectedCount = bluetoothConnectedCount
