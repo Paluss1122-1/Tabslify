@@ -3004,7 +3004,7 @@ private fun getWifiSsid(context: Context): String? {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val info = cm.getNetworkCapabilities(cm.activeNetwork)?.transportInfo as? WifiInfo
         info?.ssid?.removeSurrounding("\"")
-            .takeUnless { it.isNullOrEmpty() || it == WifiInfo.UNKNOWN_SSID }
+            .takeUnless { it.isNullOrEmpty() || it == WifiManager.UNKNOWN_SSID }
     } catch (_: Exception) {
         null
     }
