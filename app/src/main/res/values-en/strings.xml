@@ -2240,4 +2240,13 @@
         <item quantity="one">⚠️ %1$s: over %2$d minute today!</item>
         <item quantity="other">⚠️ %1$s: over %2$d minutes today!</item>
     </plurals>
+    <string name="ai_notify_absenden">Send</string>
+    <string name="ai_notify_spaeter">Later</string>
+    <string name="ai_notify_ok">OK</string>
+    <string name="ai_notify_beantwortet">Answer sent</string>
+    <string name="ai_notify_fehler">Send failed</string>
+    <string name="ai_notify_abgelaufen">This request is no longer available</string>
+    <string name="ai_notify_unvollstaendig">Please answer all questions</string>
+    <string name="ai_notify_eigene_antwort">Your answer</string>
+    <string name="ai_notify_quelle">from %1$s</string>
 </resources>

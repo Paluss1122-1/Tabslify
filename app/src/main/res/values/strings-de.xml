@@ -2986,4 +2986,13 @@
         <item quantity="one">⚠️ %1$s: heute über %2$d Minute!</item>
         <item quantity="other">⚠️ %1$s: heute über %2$d Minuten!</item>
     </plurals>
+    <string name="ai_notify_absenden">Absenden</string>
+    <string name="ai_notify_spaeter">Später</string>
+    <string name="ai_notify_ok">OK</string>
+    <string name="ai_notify_beantwortet">Antwort gesendet</string>
+    <string name="ai_notify_fehler">Senden fehlgeschlagen</string>
+    <string name="ai_notify_abgelaufen">Diese Anfrage ist nicht mehr verfügbar</string>
+    <string name="ai_notify_unvollstaendig">Bitte alle Fragen beantworten</string>
+    <string name="ai_notify_eigene_antwort">Eigene Antwort</string>
+    <string name="ai_notify_quelle">von %1$s</string>
 </resources>
