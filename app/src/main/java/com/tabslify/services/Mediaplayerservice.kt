@@ -926,10 +926,16 @@ class MediaPlayerService : MediaSessionService() {
                     saveFavorites()
                     savePlaylists()
                     if (allSongs.isNotEmpty()) playlist = allSongs else loadPlaylist()
-                    currentSongIndex = if (path != null)
-                        playlist.indexOfFirst { it.path == path }.coerceAtLeast(0)
-                    else
+                    currentSongIndex = if (path != null) {
+                        var idx = playlist.indexOfFirst { it.path == path }
+                        if (idx == -1) {
+                            loadPlaylist()
+                            idx = playlist.indexOfFirst { it.path == path }
+                        }
+                        idx.coerceAtLeast(0)
+                    } else {
                         (intent.getIntExtra(EXTRA_SONG_INDEX, 1) - 1).coerceAtLeast(0)
+                    }
                     saveMusicState()
                     handler.post {
                         ensureMusicMode()
