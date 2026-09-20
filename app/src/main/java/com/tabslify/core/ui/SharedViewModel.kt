@@ -19,4 +19,11 @@ class SharedViewModel : ViewModel() {
     fun setPendingEmailOpen(value: Pair<String, String>?) {
         _pendingEmailOpen.value = value
     }
+
+    private val _pendingAiSession = MutableStateFlow<String?>(null)
+    val pendingAiSession = _pendingAiSession
+
+    fun setPendingAiSession(value: String?) {
+        _pendingAiSession.value = value
+    }
 }
