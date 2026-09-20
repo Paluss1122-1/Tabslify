@@ -1,9 +1,12 @@
 package com.tabslify.spotifydownloader_own.ui
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -51,10 +54,13 @@ class DownloadViewModel(
         }
     }
 
+    companion object {
+        const val DOWNLOAD_CHANNEL_ID = "song_download_channel"
+    }
+
     private fun showSongDownloadedNotification(state: DownloadState.Success) {
-        val songPath = "${
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
-        }/Tabslify/${state.fileName}"
+        ensureDownloadChannel()
+        val songPath = resolveSongPath(state)
 
         val playBase = Intent(appContext, MediaPlayerService::class.java)
         playBase.action = MediaPlayerService.ACTION_PLAY_ALL_SONGS_AT_INDEX
@@ -62,10 +68,10 @@ class DownloadViewModel(
         playBase.setPackage(appContext.packageName)
         val pendingIntent = PendingIntent.getForegroundService(
             appContext, state.trackId.hashCode(), playBase,
-            PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(appContext, MediaPlayerService.CHANNEL_ID)
+        val notification = NotificationCompat.Builder(appContext, DOWNLOAD_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("✓ Song heruntergeladen")
             .setContentText("${state.artist} – ${state.title}")
@@ -74,5 +80,37 @@ class DownloadViewModel(
             .build()
 
         tNotify(appContext, state.trackId.hashCode(), notification)
+    }
+
+    private fun ensureDownloadChannel() {
+        val nm = appContext.getSystemService(NotificationManager::class.java) ?: return
+        if (nm.getNotificationChannel(DOWNLOAD_CHANNEL_ID) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    DOWNLOAD_CHANNEL_ID,
+                    "Song-Downloads",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Meldet fertige Song-Downloads"
+                }
+            )
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolveSongPath(state: DownloadState.Success): String {
+        appContext.contentResolver.query(
+            state.fileUri,
+            arrayOf(MediaStore.Audio.Media.DATA),
+            null, null, null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idx = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+                if (idx != -1) cursor.getString(idx)?.takeIf { it.isNotBlank() }?.let { return it }
+            }
+        }
+        return "${
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        }/Tabslify/${state.fileName}"
     }
 }
