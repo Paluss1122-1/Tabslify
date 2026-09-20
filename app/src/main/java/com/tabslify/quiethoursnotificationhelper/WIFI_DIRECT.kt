@@ -1504,13 +1504,14 @@ private fun sendSessionDataToLaptop(context: Context) {
     MediaAnalyticsManager.init(context)
 
     val lastAiTimestamp = loadTodayOrYesterdayEntry(context)?.timestamp ?: 0L
-    val sessions = getSessions().filter { it.startedAt >= lastAiTimestamp }
+    val sessions = MediaAnalyticsManager.dedupForStats(getSessions().filter { it.startedAt >= lastAiTimestamp })
 
     val cal = Calendar.getInstance()
     cal.add(Calendar.DAY_OF_YEAR, -2)
     val twoDaysAgoStart = cal.timeInMillis
-    val previousSessions =
+    val previousSessions = MediaAnalyticsManager.dedupForStats(
         getSessions().filter { it.startedAt in twoDaysAgoStart..<lastAiTimestamp }
+    )
 
     fun buildJsonArray(list: List<ListenSession>): JSONArray = JSONArray().apply {
         list.forEach { s ->
@@ -2399,14 +2400,15 @@ suspend fun askServer(
 }
 
 fun buildSessionStatsText(sessions: List<ListenSession>): String {
+    val deduped = MediaAnalyticsManager.dedupForStats(sessions)
     val totals = mutableMapOf<String, Triple<Long, String, Int>>()
-    for (s in sessions) {
+    for (s in deduped) {
         val cur = totals[s.label] ?: Triple(0L, s.type, 0)
         totals[s.label] = Triple(cur.first + s.listenedMs, s.type, cur.third + 1)
     }
 
     val sorted = totals.entries.sortedByDescending { it.value.first }.take(15)
-    val allTimes = sessions.map { it.startedAt }.sorted()
+    val allTimes = deduped.map { it.startedAt }.sorted()
     val fmt = SimpleDateFormat("HH:mm", Locale.GERMANY)
 
     val lines = mutableListOf(
