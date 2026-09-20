@@ -3010,6 +3010,7 @@ object MediaAnalyticsManager {
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        dedupExistingSessions()
     }
 
     fun isAnalyticsEnabled(): Boolean {
@@ -3025,10 +3026,7 @@ object MediaAnalyticsManager {
     }
 
     fun addSession(session: ListenSession) {
-        if (!isAnalyticsEnabled()) return
-        val list = getSessions().toMutableList()
-        list.add(session)
-        prefs?.edit { putString(KEY_SESSIONS, gson.toJson(list)) }
+        insertDeduped(session)
     }
 
     fun getSessions(): List<ListenSession> {
@@ -3092,17 +3090,82 @@ object MediaAnalyticsManager {
         val existing = getSessions().toMutableList()
         val existingKeys = existing.mapTo(HashSet()) { Triple(it.source, it.label, it.startedAt) }
         var added = 0
+        var changed = false
         for (session in incoming) {
             val key = Triple(session.source, session.label, session.startedAt)
-            if (existingKeys.add(key)) {
+            if (!existingKeys.add(key)) continue
+            val dupIndex = existing.indexOfFirst { isSamePlayback(it, session) }
+            if (dupIndex >= 0) {
+                existing[dupIndex] = mergedPlayback(existing[dupIndex], session)
+                changed = true
+            } else {
                 existing.add(session)
                 added++
+                changed = true
             }
         }
-        if (added > 0) {
+        if (changed) {
             prefs?.edit { putString(KEY_SESSIONS, gson.toJson(existing)) }
         }
         return added
+    }
+
+    const val SAME_PLAYBACK_WINDOW_MS = 60_000L
+
+    fun normalizeLabel(label: String): String = label.trim().lowercase()
+
+    fun isSpotifySource(source: String): Boolean =
+        source == "spotify" || source.startsWith("spotify_pc")
+
+    fun isSamePlayback(a: ListenSession, b: ListenSession): Boolean {
+        if (!isSpotifySource(a.source) || !isSpotifySource(b.source)) return false
+        if (normalizeLabel(a.label) != normalizeLabel(b.label)) return false
+        return kotlin.math.abs(a.startedAt - b.startedAt) < SAME_PLAYBACK_WINDOW_MS
+    }
+
+    fun mergedPlayback(existing: ListenSession, incoming: ListenSession): ListenSession {
+        return if (incoming.listenedMs >= existing.listenedMs) {
+            incoming.copy(repeatCount = maxOf(existing.repeatCount, incoming.repeatCount))
+        } else {
+            existing.copy(repeatCount = maxOf(existing.repeatCount, incoming.repeatCount))
+        }
+    }
+
+    fun insertDeduped(session: ListenSession): Boolean {
+        if (!isAnalyticsEnabled()) return false
+        val existing = getSessions().toMutableList()
+        for (i in existing.indices) {
+            if (isSamePlayback(existing[i], session)) {
+                existing[i] = mergedPlayback(existing[i], session)
+                prefs?.edit { putString(KEY_SESSIONS, gson.toJson(existing)) }
+                return false
+            }
+        }
+        existing.add(session)
+        prefs?.edit { putString(KEY_SESSIONS, gson.toJson(existing)) }
+        return true
+    }
+
+    fun dedupForStats(sessions: List<ListenSession>): List<ListenSession> {
+        val result = mutableListOf<ListenSession>()
+        for (session in sessions) {
+            val dupIndex = result.indexOfFirst { isSamePlayback(it, session) }
+            if (dupIndex >= 0) {
+                result[dupIndex] = mergedPlayback(result[dupIndex], session)
+            } else {
+                result.add(session)
+            }
+        }
+        return result
+    }
+
+    fun dedupExistingSessions(): Int {
+        val existing = getSessions()
+        if (existing.isEmpty()) return 0
+        val deduped = dedupForStats(existing)
+        if (deduped.size == existing.size) return 0
+        prefs?.edit { putString(KEY_SESSIONS, gson.toJson(deduped)) }
+        return existing.size - deduped.size
     }
 }
 
