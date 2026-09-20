@@ -54,6 +54,7 @@ uiGraphics = "1.12.1"
 runtimeVersion = "1.12.1"
 ui = "1.12.1"
 leakcanary = "2.14"
+leakcanaryVersion = "1.0.0"
 
 [libraries]
 androidx-autofill = { module = "androidx.autofill:autofill", version.ref = "autofill" }
@@ -120,6 +121,7 @@ androidx-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 leakcanary-android = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanary" }
+leakcanary = { group = "com.android.tools.studio.leakcanary", name = "leakcanary", version.ref = "leakcanaryVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
