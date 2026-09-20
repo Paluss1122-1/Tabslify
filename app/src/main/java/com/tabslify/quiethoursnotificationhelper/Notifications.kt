@@ -24,6 +24,7 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_EXEC
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_NOTIFICATION_DISMISSED
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_RESTORE_NOTIFICATION
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_SYNC_LAPTOP
+import com.tabslify.services.QuietHoursNotificationService.Companion.AI_NOTIFY_CHANNEL_ID
 import com.tabslify.services.QuietHoursNotificationService.Companion.ALARM_REQUEST_CODE
 import com.tabslify.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import com.tabslify.services.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
@@ -257,6 +258,21 @@ fun createNotificationChannel(context: Context) {
             enableVibration(true)
             enableLights(true)
         })
+
+    if (prvt()) {
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                AI_NOTIFY_CHANNEL_ID,
+                "KI Fragen",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Fragen von KI Agents mit Antwort direkt auf dem Handy"
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(true)
+                enableLights(true)
+            })
+    }
 }
 
 @SuppressLint("LaunchActivityFromNotification")
