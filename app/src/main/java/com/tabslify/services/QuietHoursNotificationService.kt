@@ -274,6 +274,7 @@ class QuietHoursNotificationService : Service() {
         const val EXTRA_IMAGE_INDEX = "extra_image_index"
         const val MAIL_CHANNEL_ID = "mail_channel"
         const val VIRUSTOTAL_CHANNEL_ID = "virustotal_scan_channel"
+        const val AI_NOTIFY_CHANNEL_ID = "ai_notify_channel"
 
         const val ACTION_MARK_PARTS_READ = "com.tabslify.ACTION_MARK_PARTS_READ"
         const val EXTRA_MESSAGE_ID = "extra_message_id"
@@ -769,7 +770,9 @@ class QuietHoursNotificationService : Service() {
                                 loadTodayOrYesterdayEntry(this@QuietHoursNotificationService)?.timestamp
                                     ?: 0L
 
-                            val sessions = getSessions().filter { it.startedAt >= lastAiTimestamp }
+                            val sessions = MediaAnalyticsManager.dedupForStats(
+                                getSessions().filter { it.startedAt >= lastAiTimestamp }
+                            )
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
