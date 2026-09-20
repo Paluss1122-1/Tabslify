@@ -133,6 +133,7 @@ class MainActivity : FragmentActivity() {
         if (apkmUri != null) pendingApkmUri = apkmUri
         startTarget = if (apkmUri != null) "apkm" else intent.getStringExtra("target")
         applyEmailDeepLink(intent)
+        applyAiNotifyDeepLink(intent)
         applyVirusTotalDeepLink(intent)
         setContent {
             val appColor = rememberAppColor()
@@ -187,6 +188,7 @@ class MainActivity : FragmentActivity() {
             intent.getStringExtra("target")?.let { startTarget = it }
         }
         applyEmailDeepLink(intent)
+        applyAiNotifyDeepLink(intent)
         applyVirusTotalDeepLink(intent)
     }
 
@@ -195,6 +197,12 @@ class MainActivity : FragmentActivity() {
         val uid = intent.getStringExtra("email_uid")
         if (account != null && uid != null) {
             sharedViewModel.setPendingEmailOpen(account to uid)
+        }
+    }
+
+    private fun applyAiNotifyDeepLink(intent: Intent) {
+        intent.getStringExtra("ai_session_id")?.let { sessionId ->
+            sharedViewModel.setPendingAiSession(sessionId)
         }
     }
 
