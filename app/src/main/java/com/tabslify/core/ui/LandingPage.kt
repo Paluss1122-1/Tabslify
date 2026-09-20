@@ -154,11 +154,13 @@ import com.tabslify.core.objects.PasswordStorage
 import com.tabslify.core.objects.PrefsBackup
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.toast
+import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.quicksettingsfunctions.ChargingTrackerService
 import com.tabslify.quicksettingsfunctions.startBatteryWorker
 import com.tabslify.quicksettingsfunctions.stopBatteryWorker
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.WhatsAppNotificationListener
+import com.tabslify.tabs.ainotify.AiNotifyHost
 import com.tabslify.tabs.focusguard.FocusGuardService
 import com.tabslify.tabs.focusguard.monitoring.cancelFocusGuardWorkers
 import com.tabslify.tabs.focusguard.monitoring.scheduleFocusGuardDailySummary
@@ -304,6 +306,28 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     }
 
     val sessionStatus by client.auth.sessionStatus.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var online by remember { mutableStateOf(isOnline(context)) }
+    var authStuck by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                online = isOnline(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(sessionStatus) {
+        if (sessionStatus is SessionStatus.Initializing || sessionStatus is SessionStatus.RefreshFailure) {
+            delay(10_000)
+            authStuck = true
+        } else {
+            authStuck = false
+        }
+    }
 
     if (prvt()) {
         when (sessionStatus) {
@@ -316,7 +340,12 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
             SessionStatus.Initializing,
             is SessionStatus.RefreshFailure -> {
-                if (client.auth.currentSessionOrNull() == null) {
+                if (client.auth.currentSessionOrNull() != null) {
+                    Unit
+                } else if (!online || authStuck) {
+                    SupabaseLoginScreen { }
+                    return
+                } else {
                     SupabaseLoadingScreen()
                     return
                 }
@@ -333,6 +362,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             selectedMenuItem = when (startTarget) {
                 "weather" -> MenuItem.WEATHER
                 "aitab" -> MenuItem.AITAB
+                "ai_questions" -> MenuItem.AITAB
                 "apkm" -> MenuItem.APKM_INSTALLER
                 "gmail" -> MenuItem.GMAIL
                 "virustotal" -> MenuItem.VIRUSTOTAL
@@ -375,6 +405,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
             val targetMenuItem = selectedMenuItem ?: startTarget?.let { target ->
                 when (target) {
                     "weather" -> MenuItem.WEATHER
+                    "ai_questions" -> MenuItem.AITAB
                     "apkm" -> MenuItem.APKM_INSTALLER
                     "gmail" -> MenuItem.GMAIL
                     "virustotal" -> MenuItem.VIRUSTOTAL
@@ -404,6 +435,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
+            AiNotifyHost()
         }
 
         Box(
@@ -649,6 +681,19 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var online by remember { mutableStateOf(isOnline(context)) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                online = isOnline(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     AppBackground(scrim = AppBgScrim.LIGHT) {
         CompositionLocalProvider(LocalContentColor provides Color.White) {
@@ -667,6 +712,13 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
                     color = Color.White
                 )
                 Spacer(Modifier.height(32.dp))
+                if (!online) {
+                    Text(
+                        stringResource(R.string.kein_netzwerk_verfugbar),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
@@ -731,7 +783,7 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
                             loading = false
                         }
                     }
-                }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+                }, enabled = !loading && online, modifier = Modifier.fillMaxWidth()) {
                     Text(if (loading) "..." else stringResource(R.string.anmelden))
                 }
             }
@@ -3181,7 +3233,7 @@ fun SettingsFrame(
                         )
                     }
 
-                    Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(32.dp))
                 }
             }
         }
