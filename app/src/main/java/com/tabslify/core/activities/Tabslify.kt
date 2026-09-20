@@ -19,6 +19,7 @@ import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.PrefsBackup
 import com.tabslify.core.objects.prvt
 import com.tabslify.quicksettingsfunctions.BatteryDataRepository
+import com.tabslify.tabs.ainotify.AI_NOTIFY_TOPIC
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -97,6 +98,7 @@ class Tabslify : Application() {
         FirebaseApp.initializeApp(this)
 
         if (prvt()) {
+            FirebaseMessaging.getInstance().subscribeToTopic(AI_NOTIFY_TOPIC)
             FirebaseMessaging.getInstance().subscribeToTopic("emails")
             serviceScope.launch {
                 client.auth.awaitInitialization()
