@@ -8,7 +8,7 @@ import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.net.TrafficStats
 import android.os.Build
-import android.os.Environment
+import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -168,11 +168,12 @@ import com.tabslify.tabs.focusguard.monitoring.scheduleFocusGuardWorkers
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.virustotal.VirusTotalScanBar
 import com.tabslify.tabs.virustotal.pendingVirusTotalReport
+import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -320,10 +321,14 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(sessionStatus) {
+    LaunchedEffect(sessionStatus, online) {
         if (sessionStatus is SessionStatus.Initializing || sessionStatus is SessionStatus.RefreshFailure) {
-            delay(10_000)
-            authStuck = true
+            if (!online) {
+                authStuck = true
+            } else {
+                delay(10_000.milliseconds)
+                authStuck = true
+            }
         } else {
             authStuck = false
         }
@@ -1479,7 +1484,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         val density = LocalDensity.current
 
         val usageStatsCache = remember { mutableStateOf<Boolean?>(null) }
-        val usageStatsGranted by produceState<Boolean?>(initialValue = usageStatsCache.value, permRefreshKey) {
+        val usageStatsGranted by produceState(initialValue = usageStatsCache.value, permRefreshKey) {
             value = withContext(Dispatchers.IO) { isUsageStatsGranted(context.applicationContext) }
             usageStatsCache.value = value
         }
@@ -1575,21 +1580,21 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeStyle(
-                            backgroundColor = Color(0xFF0C1017),
-                            tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
-                            blurRadius = 60.dp,
-                            noiseFactor = 0f
-                        )
-                    ) {
-                        progressive = HazeProgressive.verticalGradient(
-                            startIntensity = 1f,
-                            endIntensity = 0f,
-                            preferPerformance = true
-                        )
-                    }
+                    .hazeBlur(
+                        input = HazeInput.Sources(state = hazeState),
+                        style = HazeBlurStyle {
+                            backgroundColor(Color(0xFF0C1017))
+                            colorEffects(listOf(HazeColorEffect.tint(Color(0xFF0C1017).copy(alpha = 0.7f))))
+                            blurRadius(60.dp)
+                            noiseFactor(0f)
+                            progressive(
+                                HazeProgressive.verticalGradient(
+                                    startIntensity = 1f,
+                                    endIntensity = 0f
+                                )
+                            )
+                        }
+                    )
                     .drawWithContent {
                         drawContent()
                         val fadePx = 24.dp.toPx()
