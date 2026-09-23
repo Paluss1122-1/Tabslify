@@ -107,10 +107,11 @@ import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.c
 import com.tabslify.core.ui.calloutAwareMarkdownComponents
 import com.tabslify.core.ui.normalizeCallouts
+import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 
 @Composable
@@ -444,13 +445,14 @@ fun AITabContent(
                         modifier = Modifier
                             .matchParentSize()
                             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .hazeEffect(
-                                state = hazeState, style = HazeStyle(
-                                    backgroundColor = Color(0xFF0C1017),
-                                    tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
-                                    blurRadius = 60.dp,
-                                    noiseFactor = 0f
-                                )
+                            .hazeBlur(
+                                input = HazeInput.Sources(state = hazeState),
+                                style = HazeBlurStyle {
+                                    backgroundColor(Color(0xFF0C1017))
+                                    colorEffects(listOf(HazeColorEffect.tint(Color(0xFF0C1017).copy(alpha = 0.7f))))
+                                    blurRadius(60.dp)
+                                    noiseFactor(0f)
+                                }
                             )
                             .drawWithContent {
                                 drawContent()

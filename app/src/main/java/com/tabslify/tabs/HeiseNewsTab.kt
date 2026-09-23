@@ -92,11 +92,12 @@ import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.AiProvider
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import com.tabslify.tabs.aitab.ChatMessage
+import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
@@ -1274,21 +1275,21 @@ private fun HeiseArticleDetail(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeStyle(
-                            backgroundColor = Color(0xFF0C1017),
-                            tint = HazeTint(Color(0xFF0C1017).copy(alpha = 0.7f)),
-                            blurRadius = 60.dp,
-                            noiseFactor = 0f
-                        )
-                    ) {
-                        progressive = HazeProgressive.verticalGradient(
-                            startIntensity = 1f,
-                            endIntensity = 0f,
-                            preferPerformance = true
-                        )
-                    }
+                    .hazeBlur(
+                        input = HazeInput.Sources(state = hazeState),
+                        style = HazeBlurStyle {
+                            backgroundColor(Color(0xFF0C1017))
+                            colorEffects(listOf(HazeColorEffect.tint(Color(0xFF0C1017).copy(alpha = 0.7f))))
+                            blurRadius(60.dp)
+                            noiseFactor(0f)
+                            progressive(
+                                HazeProgressive.verticalGradient(
+                                    startIntensity = 1f,
+                                    endIntensity = 0f
+                                )
+                            )
+                        }
+                    )
                     .drawWithContent {
                         drawContent()
                         val fadePx = 24.dp.toPx()
