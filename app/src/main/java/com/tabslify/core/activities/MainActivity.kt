@@ -109,20 +109,20 @@ class MainActivity : FragmentActivity() {
             val wasPlayingPodcast = musicPrefs.getBoolean("was_playing_podcast", false)
 
             if (wasPlayingMusic || wasPlayingPodcast) {
-                com.tabslify.services.MediaPlayerService.startMusicService(this)
+                runCatching { com.tabslify.services.MediaPlayerService.startMusicService(this) }
             }
 
             val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
             val masterEnabled = prefs.getBoolean("services_master", true)
             if (masterEnabled) {
-                ChatService.startService(this)
-                
+                runCatching { ChatService.startService(this) }
+
                 if (prefs.getBoolean("service_qhns", true)) {
-                    QuietHoursNotificationService.startService(this)
+                    runCatching { QuietHoursNotificationService.startService(this) }
                 }
-                
+
                 if (prefs.getBoolean("service_battery", true)) {
-                    startBatteryWorker(this)
+                    runCatching { startBatteryWorker(this) }
                 }
             }
         }
