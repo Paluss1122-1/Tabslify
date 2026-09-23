@@ -3033,7 +3033,8 @@ object MediaAnalyticsManager {
         val json = prefs?.getString(KEY_SESSIONS, null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<ListenSession>>() {}.type
-            gson.fromJson(json, type) ?: emptyList()
+            val raw: List<ListenSession>? = gson.fromJson(json, type)
+            (raw ?: emptyList()).map { sanitize(it) }
         } catch (_: Exception) {
             emptyList()
         }
@@ -3112,14 +3113,23 @@ object MediaAnalyticsManager {
 
     const val SAME_PLAYBACK_WINDOW_MS = 60_000L
 
-    fun normalizeLabel(label: String): String = label.trim().lowercase()
+    fun sanitize(session: ListenSession): ListenSession {
+        val label = (session.label as String?) ?: ""
+        val type = (session.type as String?) ?: "music"
+        val source = (session.source as String?) ?: "local"
+        val repeatCount = if (session.repeatCount < 1) 1 else session.repeatCount
+        return session.copy(label = label, type = type, source = source, repeatCount = repeatCount)
+    }
 
-    fun isSpotifySource(source: String): Boolean =
-        source == "spotify" || source.startsWith("spotify_pc")
+    fun normalizeLabel(label: String?): String = (label ?: "").trim().lowercase()
+
+    fun isSpotifySource(source: String?): Boolean =
+        source == "spotify" || (source?.startsWith("spotify_pc") == true)
 
     fun isSamePlayback(a: ListenSession, b: ListenSession): Boolean {
         if (!isSpotifySource(a.source) || !isSpotifySource(b.source)) return false
-        if (normalizeLabel(a.label) != normalizeLabel(b.label)) return false
+        val normalizedA = normalizeLabel(a.label)
+        if (normalizedA.isEmpty() || normalizedA != normalizeLabel(b.label)) return false
         return kotlin.math.abs(a.startedAt - b.startedAt) < SAME_PLAYBACK_WINDOW_MS
     }
 
@@ -3148,12 +3158,42 @@ object MediaAnalyticsManager {
 
     fun dedupForStats(sessions: List<ListenSession>): List<ListenSession> {
         val result = mutableListOf<ListenSession>()
+        val index = HashMap<String, MutableMap<Long, MutableList<Int>>>()
         for (session in sessions) {
-            val dupIndex = result.indexOfFirst { isSamePlayback(it, session) }
-            if (dupIndex >= 0) {
-                result[dupIndex] = mergedPlayback(result[dupIndex], session)
-            } else {
+            val label = normalizeLabel(session.label)
+            if (label.isEmpty() || !isSpotifySource(session.source)) {
                 result.add(session)
+                continue
+            }
+            val bucket = session.startedAt / SAME_PLAYBACK_WINDOW_MS
+            var matchIndex = -1
+            index[label]?.let { byBucket ->
+                for (b in bucket - 1..bucket + 1) {
+                    byBucket[b]?.let { candidates ->
+                        for (pos in candidates) {
+                            if (isSamePlayback(result[pos], session)) {
+                                matchIndex = pos
+                                break
+                            }
+                        }
+                    }
+                    if (matchIndex >= 0) break
+                }
+            }
+            if (matchIndex >= 0) {
+                val oldBucket = result[matchIndex].startedAt / SAME_PLAYBACK_WINDOW_MS
+                result[matchIndex] = mergedPlayback(result[matchIndex], session)
+                val newBucket = result[matchIndex].startedAt / SAME_PLAYBACK_WINDOW_MS
+                if (oldBucket != newBucket) {
+                    index[label]?.get(oldBucket)?.remove(matchIndex)
+                    index[label]?.getOrPut(newBucket) { mutableListOf() }?.add(matchIndex)
+                }
+            } else {
+                val pos = result.size
+                result.add(session)
+                index.getOrPut(label) { HashMap() }
+                    .getOrPut(bucket) { mutableListOf() }
+                    .add(pos)
             }
         }
         return result
@@ -3163,7 +3203,7 @@ object MediaAnalyticsManager {
         val existing = getSessions()
         if (existing.isEmpty()) return 0
         val deduped = dedupForStats(existing)
-        if (deduped.size == existing.size) return 0
+        if (deduped == existing) return 0
         prefs?.edit { putString(KEY_SESSIONS, gson.toJson(deduped)) }
         return existing.size - deduped.size
     }
