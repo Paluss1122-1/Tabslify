@@ -134,8 +134,8 @@ dependencies {
     implementation(libs.core)
     implementation(libs.zxing.android.embedded)
     debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.leakcanary)
-    debugImplementation(libs.leakcanary.android)
+    "fastImplementation"(libs.leakcanary)
+    "fastImplementation"(libs.leakcanary.android)
     ksp(libs.androidx.room.compiler)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.gson)
@@ -154,7 +154,7 @@ dependencies {
     implementation(libs.rhino)
     implementation(libs.firebase.messaging)
     implementation(libs.haze)
-    implementation(libs.haze.materials)
+    implementation(libs.haze.blur)
 }
 
 tasks.configureEach {
