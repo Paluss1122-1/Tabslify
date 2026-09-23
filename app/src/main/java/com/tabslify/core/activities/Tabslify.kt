@@ -27,7 +27,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import org.mozilla.javascript.ScriptableObject
 import java.time.Instant
@@ -51,7 +50,6 @@ class Tabslify : Application() {
                 android.os.StrictMode.VmPolicy.Builder()
                     .detectLeakedClosableObjects()
                     .penaltyLog()
-                    .penaltyDeath()
                     .build()
             )
         }
@@ -60,17 +58,14 @@ class Tabslify : Application() {
 
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            runBlocking {
-                try {
-                    errorInsert(
-                        "UncaughtException: ${thread.name}",
-                        throwable.stackTraceToString().take(8000),
-                        Instant.now().toString(),
-                        "ERROR"
+            runCatching {
+                errorInsert(
+                    "UncaughtException: ${thread.name}",
+                    throwable.stackTraceToString().take(8000),
+                    Instant.now().toString(),
+                    "ERROR"
 
-                    )
-                } catch (_: Exception) {
-                }
+                )
             }
             defaultHandler?.uncaughtException(thread, throwable)
         }
@@ -85,6 +80,8 @@ class Tabslify : Application() {
             )
         }
 
+        FirebaseApp.initializeApp(this)
+
         if (prvt()) {
             Firebase.appCheck.installAppCheckProviderFactory(
                 DebugAppCheckProviderFactory.getInstance()
@@ -94,8 +91,6 @@ class Tabslify : Application() {
                 PlayIntegrityAppCheckProviderFactory.getInstance()
             )
         }
-
-        FirebaseApp.initializeApp(this)
 
         if (prvt()) {
             FirebaseMessaging.getInstance().subscribeToTopic(AI_NOTIFY_TOPIC)
