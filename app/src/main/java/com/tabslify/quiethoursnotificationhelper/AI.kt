@@ -7,6 +7,8 @@ import android.util.Log
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.RequestTimeoutException
+import com.google.firebase.ai.type.ServerException
 import com.google.firebase.ai.type.content
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.DEF_GEMINI
@@ -46,7 +48,6 @@ private fun buildSystemPrompt(target: String = ""): String {
         }
     }
 }
-
 
 private suspend fun sendGeminiRequest(
     history: List<ChatMessage> = emptyList(),
@@ -119,6 +120,18 @@ private suspend fun sendGeminiRequest(
         } else {
             generativeModel.generateContent(requestContent).text
         }
+    } catch (e: ServerException) {
+        if (e.message != null && e.message!!.contains("This model is currently experiencing high demand")) {
+            return "[!ERROR] This model is currently experiencing high demand"
+        }
+        Log.e("GeminiAI", "generateContent failed for model=$model target=$target: ${e.message}", e)
+        null
+    }catch (e: RequestTimeoutException) {
+        if (e.message != null && e.message!!.contains("The request failed to complete in the allotted time")) {
+            return "[!ERROR] The request failed to complete in the allotted time"
+        }
+        Log.e("GeminiAI", "generateContent failed for model=$model target=$target: ${e.message}", e)
+        null
     } catch (e: Exception) {
         Log.e("GeminiAI", "generateContent failed for model=$model target=$target: ${e.message}", e)
         null
