@@ -455,7 +455,6 @@ fun EmailRow(email: EmailItem, onClick: () -> Unit, onLongClick: () -> Unit) {
             }
         }
 
-        // AI-Zusammenfassung direkt unter der Email-Zeile
         if (email.hasSummary && email.summary != null) {
             Spacer(Modifier.height(8.dp))
             Row(
@@ -485,7 +484,6 @@ fun EmailRow(email: EmailItem, onClick: () -> Unit, onLongClick: () -> Unit) {
     }
 }
 
-// ─── Email-Detail ─────────────────────────────────────────────────────────────
 
 @Composable
 fun EmailDetailView(email: EmailItem, onBack: () -> Unit, onDelete: () -> Unit) {
@@ -494,7 +492,6 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit, onDelete: () -> Unit) 
             .fillMaxSize()
             .background(Color(0xFF111114))
     ) {
-        // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -528,17 +525,15 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit, onDelete: () -> Unit) 
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                // Subject
                 Text(
                     text = email.subject,
                     color = Color.White,
-                    fontSize = 18.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    lineHeight = 24.sp
+                    lineHeight = 27.sp
                 )
             }
             item {
-                // Meta
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -552,7 +547,6 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit, onDelete: () -> Unit) 
                 }
             }
 
-            // AI-Zusammenfassung ganz oben im Detail
             if (email.hasSummary && email.summary != null) {
                 item {
                     Column(
@@ -569,15 +563,15 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit, onDelete: () -> Unit) 
                             Text(
                                 stringResource(R.string.ki_zusammenfassung),
                                 color = Color(0xFF4285F4),
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                         Text(
                             text = email.summary,
                             color = Color(0xFF9EC8F5),
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp
+                            fontSize = 14.sp,
+                            lineHeight = 21.sp
                         )
                     }
                 }
@@ -585,34 +579,45 @@ fun EmailDetailView(email: EmailItem, onBack: () -> Unit, onDelete: () -> Unit) 
 
             item {
                 val body = remember(email.body) { emailBodyToMarkdown(email.body) }
+                val bodyBlocks = remember(body, email.body) {
+                    val content = body.ifBlank { email.body }
+                    content.split(Regex("\\n[ \\t]*\\n"))
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .ifEmpty { listOf(content.trim()) }
+                }
                 val mdColors = markdownColor(
-                    text = Color(0xFFCCCCDD),
+                    text = Color(0xFFE2E2EC),
                     dividerColor = Color(0xFF1E1E2A)
                 )
                 val mdTypography = markdownTypography(
-                    text = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, color = Color(0xFFCCCCDD)),
-                    paragraph = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, color = Color(0xFFCCCCDD)),
-                    list = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, color = Color(0xFFCCCCDD)),
-                    ordered = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, color = Color(0xFFCCCCDD)),
-                    bullet = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, color = Color(0xFFCCCCDD)),
-                    h1 = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE8E8F2)),
-                    h2 = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE8E8F2)),
-                    h3 = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFE8E8F2)),
-                    quote = TextStyle(fontStyle = FontStyle.Italic, color = Color(0xFF9999AA)),
+                    text = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = Color(0xFFE2E2EC)),
+                    paragraph = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = Color(0xFFE2E2EC)),
+                    list = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = Color(0xFFE2E2EC)),
+                    ordered = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = Color(0xFFE2E2EC)),
+                    bullet = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, color = Color(0xFFE2E2EC)),
+                    h1 = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF2F2F7)),
+                    h2 = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFF0F0F5)),
+                    h3 = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFECECF2)),
+                    quote = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontStyle = FontStyle.Italic, color = Color(0xFFBBBBCC)),
                     textLink = TextLinkStyles(
                         style = SpanStyle(
-                            color = Color(0xFF64B5F6),
+                            color = Color(0xFF72B7FF),
                             fontWeight = FontWeight.SemiBold,
                             textDecoration = TextDecoration.Underline
                         )
                     ),
                 )
                 SelectionContainer {
-                    Markdown(
-                        content = body.ifBlank { email.body },
-                        colors = mdColors,
-                        typography = mdTypography
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        bodyBlocks.forEach { block ->
+                            Markdown(
+                                content = block,
+                                colors = mdColors,
+                                typography = mdTypography
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -638,7 +643,6 @@ fun MetaRow(label: String, value: String) {
     }
 }
 
-// ─── Platzhalter ──────────────────────────────────────────────────────────────
 
 @Composable
 fun LoadingPlaceholder() {
@@ -726,15 +730,187 @@ private fun extractDisplayName(from: String): String {
         ?: from
 }
 private val htmlTagRegex = Regex("""<[^>]*>""")
+private val plainTextAutolinkRegex = Regex(
+    """<((?:https?://|www\.)[^\s<>]+|[^\s<>@]+@[^\s<>@]+)>""",
+    RegexOption.IGNORE_CASE
+)
+private val plainTextTagRegex = Regex(
+    """</?(?:a|article|b|blockquote|body|br|code|del|div|em|font|h[1-6]|head|hr|html|i|img|li|ol|p|pre|s|section|span|strike|strong|style|table|td|th|tr|tt|u|ul)(?=[\s/>])[^>]*>""",
+    RegexOption.IGNORE_CASE
+)
 
 fun emailBodyToMarkdown(body: String): String {
     if (body.isBlank()) return body
-    if (!looksLikeHtml(body)) return body
+    if (!looksLikeHtml(body)) return plainTextToMarkdown(body)
     return try {
         htmlToMarkdown(body)
     } catch (_: Exception) {
-        Html.fromHtml(body, Html.FROM_HTML_MODE_LEGACY).toString()
+        plainTextToMarkdown(Html.fromHtml(body, Html.FROM_HTML_MODE_LEGACY).toString())
     }
+}
+
+fun plainTextToMarkdown(text: String): String {
+    if (text.isBlank()) return text
+    var normalized = text.replace("\r\n", "\n").replace('\r', '\n')
+    if (normalized.contains("=\n")) {
+        normalized = normalized.replace("=\n", "")
+        if (Regex("=[0-9A-Fa-f]{2}").findAll(normalized).count() >= 3) {
+            normalized = Regex("=([0-9A-Fa-f]{2})").replace(normalized) { m ->
+                val code = m.groupValues[1].toIntOrNull(16)
+                code?.toChar()?.toString() ?: m.value
+            }
+        }
+    }
+    val splitEscapeWrap = Regex("(https?://\\S*(?:%|[&=+?/_-]))[ \\t]*\\n[ \\t]*(?![-=*_~#•·]+[ \\t]*(?:\\n|$))(\\S+)")
+    val longQueryWrap = Regex("(https?://\\S{40,})[ \\t]*\\n[ \\t]*(?![-=*_~#•·]+[ \\t]*(?:\\n|$))(\\S*[%&=+?#]\\S*)")
+    fun joinOnce(value: String): String =
+        splitEscapeWrap.replace(longQueryWrap.replace(value) { m -> m.groupValues[1] + m.groupValues[2] }) { m -> m.groupValues[1] + m.groupValues[2] }
+    var joined = joinOnce(normalized)
+    var rejoined = joinOnce(joined)
+    while (rejoined != joined) {
+        joined = rejoined
+        rejoined = joinOnce(joined)
+    }
+    val urlThenText = Regex("(https?://\\S*[^\\s.,;:!?)])[ \\t]+(?=[\\p{Lu}„])")
+    joined = urlThenText.replace(joined) { m -> m.groupValues[1] + "\n\n" }
+    val blocks = joined.split(Regex("\\n[ \\t]*\\n"))
+    return blocks.mapNotNull { block ->
+        plainTextBlockToMarkdown(block).takeIf { it.isNotBlank() }
+    }.joinToString("\n\n").replace(Regex("\\n{3,}"), "\n\n").trim()
+}
+
+private fun plainTextBlockToMarkdown(rawBlock: String): String {
+    val lines = rawBlock.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    if (lines.isEmpty()) return ""
+    if (lines.size == 1 && isSeparatorLine(lines[0])) return "---"
+    val outLines = mutableListOf<String>()
+    val paragraphLines = mutableListOf<String>()
+    var inList = false
+    fun flushParagraph() {
+        if (paragraphLines.isEmpty()) return
+        outLines.add(paragraphLines.joinToString("  \n"))
+        paragraphLines.clear()
+    }
+    for (line in lines) {
+        val headingTitle = framedHeadingTitle(line)
+        if (headingTitle != null) {
+            flushParagraph()
+            inList = false
+            outLines.add("**" + paragraphToMarkdown(headingTitle) + "**")
+            continue
+        }
+        if (isSeparatorLine(line)) {
+            flushParagraph()
+            inList = false
+            outLines.add("---")
+            continue
+        }
+        val withoutTags = line
+            .replace(plainTextAutolinkRegex) { m -> m.groupValues[1] }
+            .replace(plainTextTagRegex, "")
+        val trimmedStart = withoutTags.trimStart()
+        if (trimmedStart.startsWith(">")) {
+            flushParagraph()
+            inList = false
+            outLines.add("> " + paragraphToMarkdown(trimmedStart.removePrefix(">").trim()))
+            continue
+        }
+        val listContent = Regex("^[-*•]\\s+(.+)$").find(trimmedStart)?.groupValues?.get(1)
+        if (listContent != null) {
+            val item = "- " + paragraphToMarkdown(listContent.trim())
+            if (inList) {
+                outLines[outLines.lastIndex] += "\n$item"
+            } else {
+                flushParagraph()
+                outLines.add(item)
+                inList = true
+            }
+            continue
+        }
+        val text = paragraphToMarkdown(decodePlainEntities(withoutTags).trim())
+        if (text.isEmpty()) continue
+        if (inList) {
+            outLines[outLines.lastIndex] += "  \n$text"
+        } else {
+            paragraphLines.add(text)
+        }
+    }
+    flushParagraph()
+    return outLines.joinToString("\n\n")
+}
+
+private fun paragraphToMarkdown(raw: String): String {
+    val cleaned = raw.replace(Regex("\\s+"), " ").trim()
+    if (cleaned.isEmpty()) return ""
+    val urlPattern = Regex("(https?://[^\\s)\"'<>\\]]+|www\\.[^\\s)\"'<>\\]]+)")
+    val emailPattern = Regex("[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}")
+    val targets = mutableListOf<Pair<String, String>>()
+    val withUrlHolders = urlPattern.replace(cleaned) { m ->
+        val full = m.value.trimEnd('.', ',', ';', ':', '!', '?', ')', ']', '"', '\'')
+        val trail = m.value.substring(full.length)
+        val target = if (full.startsWith("www.")) "https://$full" else full
+        targets.add(full to target)
+        "\uE000${targets.lastIndex}\uE000$trail"
+    }
+    val withHolders = emailPattern.replace(withUrlHolders) { m ->
+        val mail = m.value.trimEnd('.', ',', ';', ':', '!', '?', ')', ']', '"', '\'')
+        val trail = m.value.substring(mail.length)
+        targets.add(mail to "mailto:$mail")
+        "\uE000${targets.lastIndex}\uE000$trail"
+    }
+    var escaped = withHolders
+        .replace("\\", "\\\\")
+        .replace("`", "\\`")
+        .replace("*", "\\*")
+        .replace("_", "\\_")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("|", "\\|")
+    if (escaped.startsWith("#")) escaped = "\\$escaped"
+    escaped = Regex("^(\\d+)([.)])").replace(escaped) { m -> m.groupValues[1] + "\\" + m.groupValues[2] }
+    escaped = Regex("^([+\\->])").replace(escaped) { m -> "\\" + m.groupValues[1] }
+    return Regex("\uE000(\\d+)\uE000").replace(escaped) { m ->
+        val index = m.groupValues[1].toIntOrNull()
+        val pair = if (index == null) null else targets.getOrNull(index)
+        if (pair == null) m.value else "[${pair.first}](${pair.second})"
+    }
+}
+
+private fun isSeparatorLine(line: String): Boolean {
+    val compact = line.replace(" ", "").replace("\t", "")
+    return compact.length >= 3 && compact.all { it == '=' || it == '-' || it == '_' || it == '~' || it == '*' || it == '#' || it == '•' || it == '·' }
+}
+
+private fun framedHeadingTitle(line: String): String? {
+    val trimmed = line.trim()
+    if (trimmed.length < 8) return null
+    val framed = Regex("^([-=*_~—–]{3,})\\s*(.+?)\\s*\\1\\s*$").find(trimmed)
+    if (framed != null) {
+        val middle = framed.groupValues[2].trim()
+        if (middle.any { it.isLetterOrDigit() }) return middle
+    }
+    val leaded = Regex("^([-=*_~—–]{5,})\\s+(\\S.*)$").find(trimmed)
+    if (leaded != null) {
+        val rest = leaded.groupValues[2].trim().trim('-', '=', '*', '_', '~', '—', '–', ' ')
+        if (rest.length >= 3 && rest.any { it.isLetter() }) return rest
+    }
+    return null
+}
+
+private fun decodePlainEntities(value: String): String {
+    var out = value
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+    out = Regex("&#(\\d+);").replace(out) { m ->
+        val code = m.groupValues[1].toIntOrNull()
+        code?.toChar()?.toString() ?: m.value
+    }
+    return out
 }
 
 private fun looksLikeHtml(text: String): Boolean {
@@ -746,9 +922,18 @@ private fun looksLikeHtml(text: String): Boolean {
         compact.contains("<td") ||
         compact.contains("<div") ||
         compact.contains("<span") ||
+        compact.contains("<font") ||
         compact.contains("<a ") ||
         compact.contains("<a>") ||
         compact.contains("<br") ||
+        compact.contains("<b>") ||
+        compact.contains("<b ") ||
+        compact.contains("<strong") ||
+        compact.contains("<em") ||
+        compact.contains("<i>") ||
+        compact.contains("<i ") ||
+        compact.contains("<u>") ||
+        compact.contains("<u ") ||
         compact.contains("<!doctype") ||
         (compact.contains("<p") && compact.contains("</p"))
 }
@@ -770,7 +955,7 @@ private fun htmlToMarkdown(html: String): String {
         Regex("""</(p|div|section|article|table|ul|ol|blockquote|h[1-6])>""", RegexOption.IGNORE_CASE),
         "\n\n"
     )
-    out = out.replace(Regex("""<(br|hr|/tr|/tr)>""", RegexOption.IGNORE_CASE), "\n")
+    out = out.replace(Regex("""<(br|hr|/tr)>""", RegexOption.IGNORE_CASE), "\n")
 
     out = out.replace(
         Regex("""<h([1-6])\b[^>]*>(.*?)</h\1>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)),
@@ -831,7 +1016,7 @@ private fun htmlToMarkdown(html: String): String {
 }
 
 private fun inlineToPlain(text: String): String =
-    text.replace(htmlTagRegex, " ").trim()
+    decodeEntities(text.replace(htmlTagRegex, " ")).replace(Regex("\\s+"), " ").trim()
 
 private fun decodeEntities(text: String): String =
     Html.fromHtml(text, Html.FROM_HTML_MODE_LEGACY).toString()
