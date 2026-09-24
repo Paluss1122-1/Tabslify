@@ -1,6 +1,8 @@
 package com.tabslify.tabs.school
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -51,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -212,7 +215,6 @@ fun MaterialienScreen(
             val fetchedFolders = files.map { it.name }.filter { it.isNotBlank() }.sortedDescending()
             folders = fetchedFolders
 
-            // Cleanup AI summaries/OCR for non-existent files
             scope.launch(Dispatchers.IO) {
                 try {
                     val allKeys = prefs.all.keys.filter { it.startsWith("cache_") }
@@ -232,7 +234,6 @@ fun MaterialienScreen(
                             }
                         }
 
-                        // Also remove keys for subjects that no longer exist
                         val orphanedKeys = allKeys.filter { key ->
                             fetchedFolders.none { subject -> key.startsWith("cache_${subject}_") }
                         }
@@ -979,7 +980,6 @@ fun MaterialienScreen(
                             .align(Alignment.CenterHorizontally)
                     )
 
-                    // Synchronized Header Fade out / Shrink when expanded
                     AnimatedVisibility(
                         visible = !sheetExpanded,
                         enter = fadeIn(animationSpec = tween(400)) + expandVertically(
@@ -1020,7 +1020,6 @@ fun MaterialienScreen(
                         }
                     }
 
-                    // Synchronized Content Fade in / Expand when expanded
                     AnimatedVisibility(
                         visible = sheetExpanded,
                         enter = fadeIn(animationSpec = tween(400)) + expandVertically(
@@ -1197,7 +1196,6 @@ fun MaterialienScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(BgSurface)
-                //.padding(paddingValues)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(
@@ -1222,26 +1220,53 @@ fun MaterialienScreen(
                             )
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(AccentViolet.copy(alpha = 0.15f))
-                                .clickable {
-                                    showAiSummaryToRefresh = true
-                                }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                stringResource(R.string.aktualisieren_2),
-                                color = AccentViolet,
-                                fontSize = 7.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = stringResource(R.string.reanalyze_picture),
-                                tint = Color.White
-                            )
+                            if (aiSummary != null) {
+                                IconButton(
+                                    onClick = {
+                                        val clipboard =
+                                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val label = context.getString(R.string.ai_zusammenfassung)
+                                        clipboard.setPrimaryClip(ClipData.newPlainText(label, aiSummary))
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.kopiert, label),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.ContentCopy,
+                                        contentDescription = stringResource(R.string.kopieren),
+                                        tint = TextPrimary
+                                    )
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(AccentViolet.copy(alpha = 0.15f))
+                                    .clickable {
+                                        showAiSummaryToRefresh = true
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.aktualisieren_2),
+                                    color = AccentViolet,
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = stringResource(R.string.reanalyze_picture),
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
 
