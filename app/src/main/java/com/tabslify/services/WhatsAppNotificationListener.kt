@@ -204,13 +204,13 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         put("text", text)
                         put("time", sbn.postTime)
                         put("id", sbn.id)
-                        // Stabile, eindeutige Identität für exaktes Verwerfen
-                        // und Dedupe auf PC/Website (sbn.id ist nicht app-übergreifend eindeutig).
+                        put("package", sbn.packageName)
+                        put("category", sbn.notification.category ?: "")
+                        put("ongoing", (sbn.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0)
+                        put("actions", org.json.JSONArray(sbn.notification.actions?.map { it.title.toString() } ?: emptyList()))
                         put("key", sbn.key)
                     })
                 }
-
-            if (jsonArray.length() == 0) return@launch
 
             val targetIp = laptopIp.ifEmpty { null } ?: return@launch
             try {
@@ -297,7 +297,6 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
             Log.d("MessageListener", "Received message from $title")
 
-            // Alte replyActions bereinigen (älter als 24h)
             val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000
             replyActions.entries.removeAll { it.value.timestamp < cutoff }
             if (replyActions.size > 50) {
