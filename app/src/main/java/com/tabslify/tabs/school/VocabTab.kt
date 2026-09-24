@@ -587,14 +587,13 @@ fun SchoolDashboard(
             }
         }
 
-        // AI Chat Teaser
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 8.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(BgSurface)
-                .clickable { /* Future AI Chat */ }
+                .clickable { }
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             contentAlignment = Alignment.CenterStart
         ) {
@@ -644,6 +643,8 @@ fun VocabTabContent(
         onBack()
     }
 
+    val sortedSets = savedSets.sortedByDescending { it.lastUsed }
+
     if (setToDelete != null) {
         AlertDialogTabslify(
             title = stringResource(R.string.set_loschen),
@@ -663,7 +664,7 @@ fun VocabTabContent(
                 onOpenSet = onOpenSet,
                 recentMaterials = emptyList(),
                 onOpenMaterial = onOpenMaterial,
-                showDashboard = true,
+                showDashboard = false,
                 paddingValues = paddingValues,
                 drawGradient = true
             )
@@ -731,7 +732,7 @@ fun VocabTabContent(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(savedSets, key = { it.createdAt }) { set ->
+                    items(sortedSets, key = { it.createdAt }) { set ->
                         val session = remember { loadSessionState(prefs, set.createdAt) }
                         val progressFloat by remember(session) {
                             mutableFloatStateOf(
@@ -1143,7 +1144,6 @@ fun ReviewScreen(
         var changeCount = 0
         if (isExtracting || fromScan) return 0
 
-        // Zähle gelöschte Vokabeln
         original.forEach { origVokabel ->
             if (current.none { it.id == origVokabel.id }) {
                 changeCount++
@@ -1309,7 +1309,7 @@ fun ReviewScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(currentVokabeln, key = { it.id }) { vokabel ->  // Nutze id als key
+                    items(currentVokabeln, key = { it.id }) { vokabel ->
                 var editMode by remember { mutableStateOf(false) }
                 var editLatein by remember(vokabel.latein) { mutableStateOf(vokabel.latein) }
                 var editDeutsch by remember(vokabel.deutsch) { mutableStateOf(vokabel.deutsch) }
@@ -1410,7 +1410,7 @@ fun ReviewScreen(
                                     .background(BgCard)
                             )
                             Text(
-                                vokabel.deutsch,  // Entfernt: + vokabel.id
+                                vokabel.deutsch,
                                 modifier = Modifier.weight(1f),
                                 textAlign = TextAlign.End,
                                 color = TextSecondary,
@@ -2087,6 +2087,7 @@ fun saveVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet> 
     val existing = loadVokabelSets(prefs).toMutableList()
     val idx = existing.indexOfFirst { it.name == set.name }
     if (idx >= 0) existing[idx] = set else existing.add(0, set)
+    existing.sortByDescending { it.lastUsed }
     val json = JSONArray().also { arr ->
         existing.forEach { s ->
             arr.put(JSONObject().apply {
