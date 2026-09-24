@@ -177,17 +177,18 @@ fun createNotificationChannel(context: Context) {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         })
 
+    notificationManager.createNotificationChannel(
+        NotificationChannel(
+            "Nachrichten",
+            "Nachrichten",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Nachrichten"
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
+
     if (!prvt()) {
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                "Nachrichten",
-                "Nachrichten",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Nachrichten"
-                setShowBadge(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            })
         notificationManager.createNotificationChannel(
             NotificationChannel(
                 VOICE_NOTE_CHANNEL_ID,
@@ -198,6 +199,9 @@ fun createNotificationChannel(context: Context) {
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             })
+    }
+
+    if (prvt()) {
         notificationManager.createNotificationChannel(
             NotificationChannel(
                 MAIL_CHANNEL_ID,
@@ -231,6 +235,18 @@ fun createNotificationChannel(context: Context) {
                 enableVibration(true)
                 enableLights(true)
             })
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                AI_NOTIFY_CHANNEL_ID,
+                "KI Fragen",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Fragen von KI Agents mit Antwort direkt auf dem Handy"
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(true)
+                enableLights(true)
+            })
     }
 
     notificationManager.createNotificationChannel(
@@ -258,21 +274,6 @@ fun createNotificationChannel(context: Context) {
             enableVibration(true)
             enableLights(true)
         })
-
-    if (prvt()) {
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                AI_NOTIFY_CHANNEL_ID,
-                "KI Fragen",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Fragen von KI Agents mit Antwort direkt auf dem Handy"
-                setShowBadge(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                enableVibration(true)
-                enableLights(true)
-            })
-    }
 }
 
 @SuppressLint("LaunchActivityFromNotification")
