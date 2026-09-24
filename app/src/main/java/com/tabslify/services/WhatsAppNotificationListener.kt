@@ -207,7 +207,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
                         put("package", sbn.packageName)
                         put("category", sbn.notification.category ?: "")
                         put("ongoing", (sbn.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT) != 0)
-                        put("actions", org.json.JSONArray(sbn.notification.actions?.map { it.title.toString() } ?: emptyList()))
+                        put("actions", org.json.JSONArray(sbn.notification.actions?.map { it.title.toString() } ?: emptyList<String>()))
                         put("key", sbn.key)
                     })
                 }
