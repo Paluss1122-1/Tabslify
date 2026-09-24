@@ -262,7 +262,6 @@ class MediaPlayerService : MediaSessionService() {
 
         fun ensureServiceIsRunning(context: Context) {
             if (!isRunning) {
-                // Start the service in foreground mode
                 context.startForegroundService(Intent(context, MediaPlayerService::class.java))
             }
         }
@@ -511,7 +510,7 @@ class MediaPlayerService : MediaSessionService() {
     private var songStartedAt: Long = 0L
     private var currentSongName = ""
     private var currentStreamName = ""
-    private var currentStreamShowName = ""   // Show-Name für Stream-Analytics
+    private var currentStreamShowName = ""
     private var consecutiveRepeatCount: Int = 0
 
     private var podcastSessionStartedAt: Long = 0L
@@ -1353,7 +1352,6 @@ class MediaPlayerService : MediaSessionService() {
                 updateNotification()
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
 
-                // Extract metadata and update media session
                 serviceScope.launch {
                     try {
                         if (isServiceDestroyed) return@launch
@@ -1386,7 +1384,6 @@ class MediaPlayerService : MediaSessionService() {
                             retriever.release()
                         }
                     } catch (_: Exception) {
-                        // Fallback to basic metadata
                         val mediaMetadata = MediaMetadata.Builder()
                             .setTitle(song.name)
                             .setArtworkUri(song.uri)
@@ -1745,6 +1742,7 @@ class MediaPlayerService : MediaSessionService() {
         val newPos = maxOf(0, player.currentPosition - SKIP_TIME_MS)
         player.seekTo(newPos)
         currentPodcast?.let { savePodcastPosition(it.path, newPos.toLong()) }
+        if (isPlayingPodcast) scheduleAutoPause()
         updateNotification()
     }
 
@@ -1753,6 +1751,7 @@ class MediaPlayerService : MediaSessionService() {
         val newPos = minOf(player.duration, player.currentPosition + skipMs)
         player.seekTo(newPos)
         currentPodcast?.let { savePodcastPosition(it.path, newPos.toLong()) }
+        if (isPlayingPodcast) scheduleAutoPause()
         updateNotification()
     }
 
@@ -2933,7 +2932,6 @@ class MediaPlayerService : MediaSessionService() {
             val (episodeTitle, showName) = resolveStreamMeta(url)
             if (isServiceDestroyed) return@launch
 
-            // Stream-Titel für Anzeige und Analytics ermitteln
             currentStreamName = when {
                 showName.isNotEmpty() && episodeTitle.isNotEmpty() -> episodeTitle
                 showName.isNotEmpty() -> showName
@@ -2941,7 +2939,6 @@ class MediaPlayerService : MediaSessionService() {
                 else -> url.substringAfterLast("/").substringBeforeLast(".")
             }
 
-            // Show zuweisen oder erstellen
             currentStreamShowName = if (showName.isNotEmpty()) {
                 val existingShow = PodcastShowManager.getShows()
                     .find { it.name.equals(showName, ignoreCase = true) }
@@ -2977,7 +2974,6 @@ class MediaPlayerService : MediaSessionService() {
                             updateNotification()
                         }
                         setOnCompletionListener {
-                            // Analytics für Stream-Completion
                             saveStreamSession()
                             onPodcastComplete()
                         }
