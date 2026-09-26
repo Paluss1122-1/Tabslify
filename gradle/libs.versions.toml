@@ -8,7 +8,6 @@ core = "3.5.4"
 coreSplashscreen = "1.2.0"
 firebaseAi = "17.17.0"
 firebaseBom = "34.19.0"
-firebaseConfig = "23.1.0"
 firebaseMessaging = "25.1.3"
 firebasePlayintegrity = "19.4.1"
 foundation = "1.12.1"
@@ -78,7 +77,6 @@ firebase-ai = { module = "com.google.firebase:firebase-ai", version.ref = "fireb
 firebase-appcheck-debug = { module = "com.google.firebase:firebase-appcheck-debug", version.ref = "firebasePlayintegrity" }
 firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity", version.ref = "firebasePlayintegrity" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
-firebase-config = { module = "com.google.firebase:firebase-config", version.ref = "firebaseConfig" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze1" }
@@ -87,6 +85,8 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
