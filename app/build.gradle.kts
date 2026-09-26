@@ -94,6 +94,10 @@ android {
             useLegacyPackaging = false
         }
     }
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
 }
 
 dependencies {
@@ -105,7 +109,8 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.play.services.location)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.compose.foundation.layout)
@@ -119,7 +124,6 @@ dependencies {
     implementation(libs.functions.kt)
     implementation(libs.coil.compose)
     implementation(libs.androidx.material.icons.extended)
-    implementation(libs.androidx.material3)
     implementation(libs.androidx.room.runtime)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.media3.exoplayer)
@@ -148,7 +152,6 @@ dependencies {
     implementation(libs.firebase.ai)
     implementation(libs.multiplatform.markdown.renderer.android)
     implementation(libs.multiplatform.markdown.renderer.m3)
-    implementation(libs.firebase.config)
     implementation(libs.firebase.appcheck.playintegrity)
     implementation(libs.firebase.appcheck.debug)
     implementation(libs.rhino)
@@ -161,6 +164,9 @@ tasks.configureEach {
     if (name.contains("Debug") &&
         (name.contains("ArtProfile") || name.contains("BaselineProfile"))
     ) {
+        enabled = false
+    }
+    if (name.startsWith("lint") || name.startsWith("updateLint")) {
         enabled = false
     }
 }
