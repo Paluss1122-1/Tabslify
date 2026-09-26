@@ -1588,6 +1588,23 @@
     <string name="sync_totp_cloud_behalten">Cloud-2FA behalten</string>
     <string name="sync_totp_cloud_loschen">Cloud-2FA entfernen</string>
     <string name="sync_totp_lokal_ubernehmen">Lokales 2FA übernehmen</string>
+    <string name="sync_konflikt_password_different">Passwort in Cloud und lokal unterscheiden sich.</string>
+    <string name="sync_entschluesselung_fehlgeschlagen">%1$d Einträge konnten nicht entschlüsselt werden – Master-Passwort prüfen</string>
+    <string name="sync_diagnose_titel">Sync-Diagnose</string>
+    <string name="sync_diagnose_geraet">Gerät</string>
+    <string name="sync_diagnose_echtes_geraet">Echtes Gerät</string>
+    <string name="sync_diagnose_dev_modus">Dev-Modus (prvt)</string>
+    <string name="sync_diagnose_master_gesetzt">Master-Passwort gesetzt</string>
+    <string name="sync_diagnose_online">Online</string>
+    <string name="sync_diagnose_lokal">Lokal</string>
+    <string name="sync_diagnose_cloud">Cloud</string>
+    <string name="sync_diagnose_letzter_sync">Letzter Sync</string>
+    <string name="sync_diagnose_nie">nie</string>
+    <string name="sync_diagnose_pw_entschluesselbar">PW entschlüsselbar</string>
+    <string name="sync_diagnose_pw_laenge">PW-Länge</string>
+    <string name="sync_diagnose_totp_in_cloud">TOTP in Cloud</string>
+    <string name="sync_diagnose_totp_entschluesselbar">TOTP entschlüsselbar</string>
+    <string name="sync_diagnose_eintraege">Einträge</string>
     <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:323 -->
     <string name="eintrag_gespeichert">✅ Eintrag gespeichert</string> <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:366 -->
     <string name="aktualisiert_2">✅ Aktualisiert</string> <!-- app/src/main/java/com/tabslify/tabs/authenticator/Passwordmanagerscreen.kt:382 -->
@@ -1874,6 +1891,14 @@
     <string name="loschen_3">🗑  Löschen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:852 -->
     <string name="sets_mischen">Sets mischen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:946 -->
     <string name="bild_auswahlen">Bild auswählen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1014 -->
+    <string name="erkennung_ueber">Erkennung über: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1168  ||  %1$s=label -->
+    <string name="engine_laptop">Laptop (lokal)</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1180 -->
+    <string name="engine_nvidia">NVIDIA</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1181 -->
+    <string name="engine_gemini">Gemini</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1182 -->
+    <string name="engine_laptop_fallback">Laptop (lokal), sonst %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1147  ||  %1$s=engineName(fallbackEngine) -->
+    <string name="engine_plan_lokal">Zuerst der verbundene Laptop, sonst die KI-API</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1153 -->
+    <string name="engine_plan_cloud">Das Bild wird an die KI-API gesendet</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1154 -->
+    <string name="engine_genutzt">Genutzt für dieses Bild</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1152 -->
     <string name="format_latein_deutsch">Format: LATEIN | DEUTSCH</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1015 -->
     <string name="anderes_bild">Anderes Bild</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1033 -->
     <string name="bild_wahlen">Bild wählen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1033 -->
