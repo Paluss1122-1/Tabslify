@@ -56,6 +56,17 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tabslify.R
 import com.tabslify.core.functions.errorInsert
+import com.tabslify.core.functions.fetchPodcastFeed
+import com.tabslify.core.functions.isUnseenPodcastEpisode
+import com.tabslify.core.functions.loadCachedNewEpisodes
+import com.tabslify.core.functions.loadPodcastSeenAt
+import com.tabslify.core.functions.markPodcastEpisodeDownloaded
+import com.tabslify.core.functions.markPodcastSeen
+import com.tabslify.core.functions.podcastCheckIsFresh
+import com.tabslify.core.functions.podcastDownloadPrefs
+import com.tabslify.core.functions.podcastFavPrefs
+import com.tabslify.core.functions.readPodcastEpisodes
+import com.tabslify.core.functions.runPodcastCheck
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.FeedCard
@@ -67,16 +78,13 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.time.Instant
-import javax.xml.XMLConstants
-import javax.xml.parsers.DocumentBuilderFactory
 
 data class PodcastFeed(
     val title: String,
@@ -155,17 +163,34 @@ fun PodcastTab() {
     var loadingEpisodes by remember { mutableStateOf<String?>(null) }
     var feedToUnfav by remember { mutableStateOf<PodcastFeed?>(null) }
     var newEpisodesState by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var seenShows by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var seenAtState by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
 
     LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            try {
-                val svc = com.tabslify.services.QuietHoursNotificationService()
-                val found = svc.checkPodcastsAndNotify(context, true)
-                newEpisodesState = found
-            } catch (_: Exception) {
-            }
+        val appContext = context.applicationContext
+        val snapshot = withContext(Dispatchers.IO) {
+            Triple(
+                loadCachedNewEpisodes(appContext),
+                loadPodcastSeenAt(appContext),
+                podcastCheckIsFresh(appContext)
+            )
         }
+        newEpisodesState = snapshot.first
+        seenAtState = snapshot.second
+        if (snapshot.third) return@LaunchedEffect
+        val found = try {
+            withContext(Dispatchers.IO) { runPodcastCheck(appContext) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            errorInsert(
+                "podcastCheckTab",
+                "Hintergrundpruefung fehlgeschlagen: ${e.message}",
+                Instant.now().toString(),
+                "ERROR"
+            )
+            return@LaunchedEffect
+        }
+        newEpisodesState = found
     }
 
     val isUrl = remember(query) {
@@ -244,76 +269,9 @@ fun PodcastTab() {
         if (episodes.containsKey(feedUrl)) return
         loadingEpisodes = feedUrl
         try {
-            val doc = withContext(Dispatchers.IO) {
-                var url = URL(feedUrl)
-                var conn: HttpURLConnection
-                var redirects = 0
-                while (true) {
-                    conn = url.openConnection() as HttpURLConnection
-                    conn.setRequestProperty("Accept-Charset", "UTF-8")
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                    conn.connectTimeout = 15000
-                    conn.readTimeout = 15000
-                    conn.instanceFollowRedirects = true
-                    val code = conn.responseCode
-                    if (code in 300..399 && redirects < 5) {
-                        val location = conn.getHeaderField("Location") ?: break
-                        conn.disconnect()
-                        url = URL(url, location)
-                        redirects++
-                        continue
-                    }
-                    break
-                }
-                val factory = DocumentBuilderFactory.newInstance()
-                runCatching { factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
-                runCatching { factory.setFeature("http://xml.org/sax/features/external-general-entities", false) }
-                runCatching { factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
-                runCatching { factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
-                runCatching {
-                    factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
-                    factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
-                }
-                runCatching { factory.isXIncludeAware = false }
-                runCatching { factory.isExpandEntityReferences = false }
-                val builder = factory.newDocumentBuilder()
-                builder.parse(conn.inputStream)
-            }
-            val items = doc.getElementsByTagName("item")
-            val list = (0 until minOf(items.length, 50)).mapNotNull { i ->
-                val item = items.item(i)
-                val children = item.childNodes
-                var title = ""
-                var audioUrl = ""
-                var pubDate = ""
-                for (j in 0 until children.length) {
-                    val node = children.item(j)
-                    when (node.nodeName) {
-                        "title" -> title = node.textContent.trim()
-                        "enclosure" -> audioUrl =
-                            node.attributes?.getNamedItem("url")?.nodeValue ?: ""
-
-                        "pubDate" -> pubDate = node.textContent.trim()
-                        "isoDate" -> if (pubDate.isEmpty()) pubDate = node.textContent.trim()
-                    }
-                }
-                if (audioUrl.isEmpty()) null else {
-                    val timestamp = try {
-                        java.text.SimpleDateFormat(
-                            "EEE, dd MMM yyyy HH:mm:ss Z",
-                            java.util.Locale.ENGLISH
-                        ).parse(pubDate)?.time
-                            ?: System.currentTimeMillis()
-                    } catch (_: Exception) {
-                        try {
-                            Instant.parse(pubDate).toEpochMilli()
-                        } catch (_: Exception) {
-                            System.currentTimeMillis()
-                        }
-                    }
-                    Episode(title.ifEmpty { noTitleMsg }, audioUrl, timestamp)
-                }
-            }.sortedByDescending { it.publishDate }
+            val list = readPodcastEpisodes(fetchPodcastFeed(feedUrl), 50)
+                .map { Episode(it.title.ifEmpty { noTitleMsg }, it.audioUrl, it.publishedAt) }
+                .sortedByDescending { it.publishDate }
             episodes = episodes + (feedUrl to list)
         } catch (e: Exception) {
             episodes = episodes + (feedUrl to emptyList())
@@ -347,6 +305,7 @@ fun PodcastTab() {
 
         if (alreadyDone) {
             Toast.makeText(context, fileExistsMsg, Toast.LENGTH_SHORT).show()
+            markPodcastEpisodeDownloaded(context.applicationContext, audioUrl)
             return
         }
 
@@ -360,11 +319,11 @@ fun PodcastTab() {
         }
         val downloadId = dm.enqueue(request)
 
-        val prefs = context.getSharedPreferences("podcast_downloads", Context.MODE_PRIVATE)
-        prefs.edit {
+        podcastDownloadPrefs(context).edit {
             putString("pending_$downloadId", JSONObject().apply {
                 put("safeTitle", safeTitle)
                 put("showName", showName)
+                put("audioUrl", audioUrl)
             }.toString())
         }
 
@@ -376,7 +335,7 @@ fun PodcastTab() {
     }
 
     val scope = rememberCoroutineScope()
-    val prefs = context.getSharedPreferences("podcast_favs", Context.MODE_PRIVATE)
+    val prefs = podcastFavPrefs(context)
 
     fun loadFavs(): Map<String, PodcastFeed> {
         val raw = prefs.getString("favs", null) ?: return emptyMap()
@@ -544,11 +503,14 @@ fun PodcastTab() {
                     items(favorites.values.toList()) { feed ->
                         val isExpanded = expandedFeedUrl == feed.feedUrl
                         val feedEpisodes = episodes[feed.feedUrl]
-                        val newAudioUrls = remember(newEpisodesState, feed.title) {
-                            newEpisodesState.filter { it.optString("showName") == feed.title }
+                        val seenAt = seenAtState[feed.feedUrl] ?: 0L
+                        val newAudioUrls = remember(newEpisodesState, feed.title, seenAt) {
+                            newEpisodesState
+                                .filter { it.optString("showName") == feed.title }
+                                .filter { isUnseenPodcastEpisode(it, seenAt) }
                                 .map { it.optString("audioUrl") }.toSet()
                         }
-                        val hasNew = newAudioUrls.isNotEmpty() && feed.title !in seenShows
+                        val hasNew = newAudioUrls.isNotEmpty() && !isExpanded
 
                         Box {
                             FeedCard(
@@ -559,7 +521,16 @@ fun PodcastTab() {
                                     else {
                                         expandedFeedUrl = feed.feedUrl
                                         scope.launch { loadEpisodes(feed.feedUrl) }
-                                        seenShows = seenShows + feed.title
+                                        val seenMark = newEpisodesState
+                                            .filter { it.optString("showName") == feed.title }
+                                            .maxOfOrNull { it.optLong("publishedAt") }
+                                            ?: System.currentTimeMillis()
+                                        markPodcastSeen(
+                                            context.applicationContext,
+                                            feed.feedUrl,
+                                            seenMark
+                                        )
+                                        seenAtState = seenAtState + (feed.feedUrl to seenMark)
                                     }
                                 },
                                 onToggleFav = { feedToUnfav = feed },
@@ -573,7 +544,7 @@ fun PodcastTab() {
                                 onStream = { url -> streamEpisode(url) },
                                 newAudioUrls = newAudioUrls,
                             )
-                            if (hasNew && !isExpanded) {
+                            if (hasNew) {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
