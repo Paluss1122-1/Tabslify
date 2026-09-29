@@ -101,6 +101,8 @@ android {
 }
 
 dependencies {
+    //noinspection UseTomlInstead
+    implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
