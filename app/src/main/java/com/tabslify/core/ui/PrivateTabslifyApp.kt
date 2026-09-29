@@ -192,7 +192,6 @@ import com.tabslify.tabs.focusguard.FocusGuardTabContent
 import com.tabslify.tabs.mediaplayer.AiResponseHistorySheet
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaTab
-import com.tabslify.tabs.mediaplayer.PodcastTab
 import com.tabslify.tabs.pendingApkmUri
 import com.tabslify.tabs.school.VocabTab
 import com.tabslify.tabs.virustotal.VirusTotalTabContent
@@ -341,11 +340,6 @@ enum class MenuItem(
         "🖥️",
         { RemoteDesktopTabContent() }
     ),
-    PODCAST(
-        R.string.podcasts,
-        "🎙️",
-        { PodcastTab() }
-    ),
     HEISE_NEWS(
         R.string.heise_news,
         "📰",
@@ -447,6 +441,7 @@ fun PrivateTabslifyApp(
         isHelpOpen = false
         gesturesEnabled = when (selectedMenuItem) {
             MenuItem.EXPLORE -> false
+            MenuItem.REMOTEDESKTOP -> false
             MenuItem.GALLERY -> false
             else -> true
         }
