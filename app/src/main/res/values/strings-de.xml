@@ -1377,57 +1377,24 @@
     <string name="nummer_eingeben">Nummer eingeben</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:406 -->
     <string name="gespeicherte_nummer">Gespeicherte Nummer: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:416  ||  %1$s=currentNumber -->
     <string name="nummer">Nummer</string> <!-- app/src/main/java/com/tabslify/tabs/QuickSettingsTab.kt:426 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:173 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:226 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:237 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:264  ||  %1$s=broadcastCount -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:280  ||  %1$s=host.name, %2$s=host.ip -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:290 -->
-    <string name="keine_hosts_gefunden_beide_gerate">Keine Hosts gefunden. Beide Geräte im selben WLAN?</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:298 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:306 -->
-    <string name="discovery_fehlgeschlagen">Discovery fehlgeschlagen: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:309  ||  %1$s=e.message -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:324  ||  %1$s=host.ip, %2$s=host.port -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:333 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:348  ||  %1$s=pipelineDepth -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:361 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:365 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:369 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:379  ||  %1$s=pendingDecodes -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:418  ||  %1$s=decodeTime, %2$s=bitmap.width, %3$s=bitmap.height -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:443 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:446 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:455 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:458 | RemoteDesktopTab.kt:484  ||  %1$s=t.message -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:465  ||  %1$s=code, %2$s=reason -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:469  ||  %1$s=code, %2$s=reason -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:473 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:481 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:495  ||  %1$s=sent -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:497 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:505 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:523  ||  %1$s=ms, %2$s=action -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:524  ||  %1$s=action, %2$s=ms -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:525 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:527 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:534 -->
-    <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:538 -->
-    <string name="remote_desktop_2">🖥️ Remote Desktop</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:626 -->
-    <string name="verbinden">Verbinden</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:651 | RemoteDesktopTab.kt:835 -->
-    <string name="auf_einen_pc_zugreifen">Auf einen PC zugreifen</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:657 -->
-    <string name="freigeben">Freigeben</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:682 -->
-    <string name="dieses_gerat_freigeben_nicht_verfugbar">Dieses Gerät freigeben (nicht verfügbar)</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:688 -->
-    <string name="suche_im_netzwerk">Suche im Netzwerk…</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:705 -->
-    <string name="stelle_sicher_dass_beide_gerate">Stelle sicher, dass beide Geräte\nim selben WLAN sind</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:708 -->
-    <string name="gefundene_hosts">Gefundene Hosts (%1$d)</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:752  ||  %1$s=hosts.size -->
-    <string name="erneut_suchen">Erneut suchen</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:760 -->
-    <string name="pin_eingeben">PIN eingeben</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:799 -->
-    <string name="verbinde_mit">Verbinde mit: %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:803  ||  %1$s=selectedHost!!.name -->
-    <string name="verbinde_mit_2">Verbinde mit %1$s…</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:855  ||  %1$s=host.name -->
-    <string name="vollbild">Vollbild</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1074 | MaterialScreen.kt:1084 -->
-    <string name="trennen">Trennen</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1083 -->
-    <string name="warte_auf_ersten_frame">Warte auf ersten Frame…</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1102 -->
-    <string name="querformat_fur_beste_darstellung">💡 Querformat für beste Darstellung</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1105 -->
-    <string name="host_modus_nicht_verfugbar">Host-Modus nicht verfügbar</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1125 -->
+    <string name="verbinden">Verbinden</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1057 -->
+    <string name="vollbild">Vollbild</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1311 | MaterialScreen.kt:1084 -->
+    <string name="trennen">Trennen</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1316 -->
+    <string name="rdp_ip">IP-Adresse des Rechners</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1022 -->
+    <string name="rdp_benutzername">Benutzername (Domäne leer lassen)</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1029 -->
+    <string name="rdp_passwort">RDP-Passwort</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1036 -->
+    <string name="rdp_passwort_merken">Passwort merken</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1044 -->
+    <string name="rdp_zurueck">Abbrechen und App schließen</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1061 -->
+    <string name="rdp_verbinde">Verbindung zu %1$s wird aufgebaut…</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:948  ||  %1$s=current.ip --> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:949 | RemoteDesktopTab.kt:1012 -->
+    <string name="rdp_hinweis_nativ">Direktes RDP aus der App, ohne zusätzlichen Dienst auf dem Rechner. Wie die Windows-App.</string>
+    <string name="rdp_fehler_angaben">Bitte Rechner, Benutzer und Passwort angeben.</string>
+    <string name="rdp_getrennt">Die Verbindung wurde getrennt.</string>
+    <string name="rdp_verbinde_erneuert">Verbindung wird erneuert…</string>
+    <string name="rdp_neuverbinden_fehlgeschlagen">Die Verbindung brach ab und konnte nicht neu aufgebaut werden.</string>
+    <string name="remotedesktoptab_wake_lock_waehrend_einer_remote_desktop_sitzung">Hält WLAN und Bildschirm während einer Remote-Desktop-Sitzung aktiv, damit die Verbindung nicht abbricht.</string>
+    <string name="rdp_tastatur_hinweis">Tippen zum Senden, Pfeiltasten und Enter werden durchgereicht.</string>
+    <string name="rdp_warte_auf_bild">Warte auf das erste Bild…</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1335 -->
+    <string name="rdp_tastatur">⌨</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1443 -->
     <string name="berechtigungen_standort_immer_erlauben">Berechtigungen -&gt; Standort -&gt; Immer erlauben</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:415 -->
     <string name="tipp">TIPP</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:763 -->
     <string name="wetter_notification_body">%1$s %2$s\n\n🌡️ Temperatur: %3$d°C\n🌡️ Gefühlt: %4$d°C\n💧 Luftfeuchtigkeit: %5$d%%\n💨 Wind: %6$d km/h\n🔽 Luftdruck: %7$d hPa</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1178  ||  %1$s=emoji, %2$s=condition, %3$s=temp, %4$s=feelsLike, %5$s=humidity, %6$s=wind, %7$s=pressure -->
@@ -1729,6 +1696,8 @@
     <string name="nachtmodus">Nachtmodus</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:322 -->
     <string name="enabled">Enabled</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:323 -->
     <string name="heim_wlan">Heim-WLAN</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:319 -->
+    <string name="netz_typ">Netz</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:608 -->
+    <string name="letzter_check">Letzter Check</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:609 -->
     <string name="aktiv">aktiv</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:315 -->
     <string name="verbunden">verbunden</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:320 -->
     <string name="ja">ja</string> <!-- app/src/main/java/com/tabslify/tabs/exploretab/ExploreTabContent.kt:322 -->
