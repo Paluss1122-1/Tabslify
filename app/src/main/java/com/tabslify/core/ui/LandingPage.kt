@@ -126,6 +126,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -346,14 +348,14 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
             SessionStatus.Initializing,
             is SessionStatus.RefreshFailure -> {
-                if (client.auth.currentSessionOrNull() != null) {
-                    Unit
-                } else if (!online || authStuck) {
-                    SupabaseLoginScreen { }
-                    return
-                } else {
-                    SupabaseLoadingScreen()
-                    return
+                if (client.auth.currentSessionOrNull() == null) {
+                    if (!online || authStuck) {
+                        SupabaseLoginScreen { }
+                        return
+                    } else {
+                        SupabaseLoadingScreen()
+                        return
+                    }
                 }
             }
         }
@@ -382,8 +384,12 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
     val landingOffsetX = remember { Animatable(if (!hasLoadedApp) 0f else -1f) }
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     fun openLanding() {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
         landingReloadTrigger++
         scope.launch {
             landingOffsetX.animateTo(0f, tween(360, easing = FastOutSlowInEasing))
@@ -1355,6 +1361,8 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
     val setAlarm1 = stringResource(R.string.wifi_direct_set_alarm_befehl_vom_notebook)
     val wifiState1 = stringResource(R.string.reportdeviceinformation_wlan_status_hotspot)
     val networkState1 = stringResource(R.string.reportdeviceinformation_netzwerkstatus_konnektivitat)
+    val wakeLock1 =
+        stringResource(R.string.remotedesktoptab_wake_lock_waehrend_einer_remote_desktop_sitzung)
     val focusguardUsageDesc = stringResource(R.string.focusguard_perm_usage_desc)
     val focusguardOverlayDesc = stringResource(R.string.focusguard_perm_overlay_desc)
     val focusguardNotifDesc = stringResource(R.string.focusguard_perm_notifications_desc)
@@ -1390,6 +1398,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
         setAlarm1,
         wifiState1,
         networkState1,
+        wakeLock1,
         focusguardUsageDesc,
         focusguardOverlayDesc,
         focusguardNotifDesc
@@ -1468,6 +1477,9 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
             ),
             "ACCESS_NETWORK_STATE" to listOf(
                 networkState1
+            ),
+            "WAKE_LOCK" to listOf(
+                wakeLock1
             )
         )
     }
@@ -1519,6 +1531,7 @@ fun PermissionInfoScreen(onboarding: Boolean = false, onClose: (() -> Unit)? = n
                     add("SET_ALARM")
                     add("ACCESS_WIFI_STATE")
                     add("ACCESS_NETWORK_STATE")
+                    add("WAKE_LOCK")
                 }
             }
         }
