@@ -10,6 +10,8 @@ import com.google.firebase.messaging.RemoteMessage
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify
 import com.tabslify.core.activities.fetchAndRun
+import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.emailNotificationId
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify
 import com.tabslify.services.QuietHoursNotificationService.Companion.AI_NOTIFY_CHANNEL_ID
@@ -44,6 +46,18 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             handleAiNotify(remoteMessage.data)
             return
         }
+        if (remoteMessage.data["target"] == "gmail_cancel" && prvt()) {
+            val account = remoteMessage.data["account"]
+            val uids = remoteMessage.data["uids"].orEmpty()
+            if (account != null && uids.isNotEmpty()) {
+                val manager = applicationContext.getSystemService(NotificationManager::class.java)
+                for (uid in uids.split(',')) {
+                    if (uid.isEmpty()) continue
+                    manager?.cancel(Config.EMAIL_NOTIF_TAG, emailNotificationId(account, uid))
+                }
+            }
+            return
+        }
         if (remoteMessage.from?.endsWith("emails") == true && prvt()) {
             println("Email notification received")
             val title = remoteMessage.notification?.title ?: remoteMessage.data["title"] ?: return
@@ -51,6 +65,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             println("Title: $title, Body: $body")
             val account = remoteMessage.data["account"]
             val uid = remoteMessage.data["uid"]
+            val notifId = if (account != null && uid != null) {
+                emailNotificationId(account, uid)
+            } else {
+                System.currentTimeMillis().toInt()
+            }
 
             val intentBase = Intent(applicationContext, MainActivity::class.java)
             intentBase.action = Intent.ACTION_VIEW
@@ -77,7 +96,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .build()
-            tNotify(applicationContext, System.currentTimeMillis().toInt(), notification)
+            val notifTag = if (account != null && uid != null) Config.EMAIL_NOTIF_TAG else null
+            tNotify(applicationContext, notifId, notification, notifTag)
             return
         }
         val scriptName = remoteMessage.data["script_name"] ?: return
