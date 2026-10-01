@@ -96,7 +96,6 @@ object Config {
         MenuItem.EXPLORE to R.string.so_funktioniert_die_karte_1,
         MenuItem.CALENDAR to R.string.so_bedienst_du_den_kalender,
         MenuItem.REMOTEDESKTOP to R.string.so_bedienst_du_die_fernsteuerung,
-        MenuItem.PODCAST to R.string.so_bedienst_du_die_podcasts,
         MenuItem.HEISE_NEWS to R.string.so_bedienst_du_die_news,
         MenuItem.PC_MANAGER to R.string.so_bedienst_du_den_pc,
         MenuItem.APKM_INSTALLER to R.string.so_bedienst_du_den_apkm,
