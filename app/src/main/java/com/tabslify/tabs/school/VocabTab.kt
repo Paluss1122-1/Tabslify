@@ -98,6 +98,7 @@ import com.tabslify.core.ui.TextSecondary
 import com.tabslify.core.ui.TextTertiary
 import com.tabslify.quiethoursnotificationhelper.callNvidiaVisionApi
 import com.tabslify.quiethoursnotificationhelper.flashcardVokabelnFlow
+import com.tabslify.quiethoursnotificationhelper.getPreferredAiProvider
 import com.tabslify.quiethoursnotificationhelper.trySendImageToLaptop
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Job
@@ -148,6 +149,8 @@ data class WidthState(
 
 enum class VokabelTabScreen { DASHBOARD, HOME, UPLOAD, REVIEW, LEARN, MATERIALIEN }
 
+enum class ExtractionEngine { LAPTOP, NVIDIA, GEMINI }
+
 private fun parseRecentMaterial(serialized: String): RecentMaterial? {
     val parts = serialized.split("\u001f")
     if (parts.size != 3) return null
@@ -181,6 +184,11 @@ fun VocabTab(paddingValues: PaddingValues) {
     }
     var vokabeln by remember { mutableStateOf<List<Vokabel>>(emptyList()) }
     var isExtracting by remember { mutableStateOf(false) }
+    var usedEngine by remember { mutableStateOf<ExtractionEngine?>(null) }
+    val cloudEngine = remember {
+        if (getPreferredAiProvider(context, "vision") == "nvidia") ExtractionEngine.NVIDIA
+        else ExtractionEngine.GEMINI
+    }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var savedSets by remember { mutableStateOf(loadVokabelSets(prefs)) }
     var activeSet by remember { mutableStateOf<VokabelSet?>(null) }
@@ -273,6 +281,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                 bitmap?.recycle()
                 bitmap = uriToBitmap(context, it)
                 vokabeln = emptyList()
+                usedEngine = null
                 screen = VokabelTabScreen.UPLOAD
             }
         }
@@ -332,7 +341,10 @@ fun VocabTab(paddingValues: PaddingValues) {
             VokabelTabScreen.HOME -> VocabTabContent(
                 savedSets = savedSets,
                 prefs = prefs,
-                onNewSet = { screen = VokabelTabScreen.UPLOAD },
+                onNewSet = {
+                    usedEngine = null
+                    screen = VokabelTabScreen.UPLOAD
+                },
                 onOpenSet = { set -> openSetAndUpdateLastUsed(set) },
                 onLearnWeak = { set ->
                     openSetAndUpdateLastUsed(
@@ -393,6 +405,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                                 val sent =
                                     if (!Config.realDevice) false else trySendImageToLaptop(bytes)
                                 if (sent) {
+                                    usedEngine = ExtractionEngine.LAPTOP
                                     val result = flashcardVokabelnFlow.first { it != null }
                                     vokabeln = result ?: emptyList()
                                     if (vokabeln.isNotEmpty()) screen = VokabelTabScreen.REVIEW
@@ -400,6 +413,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                                         errorMessage = lokaleExtraktionLeer
                                     }
                                 } else {
+                                    usedEngine = cloudEngine
                                     callNvidiaVisionApi(
                                         context,
                                         bmp,
@@ -441,6 +455,9 @@ fun VocabTab(paddingValues: PaddingValues) {
                         }
                     }
                 },
+                plannedEngine = if (Config.realDevice) ExtractionEngine.LAPTOP else cloudEngine,
+                fallbackEngine = cloudEngine,
+                usedEngine = usedEngine,
                 paddingValues = paddingValues
             )
 
@@ -974,6 +991,9 @@ fun UploadScreen(
     onPickImage: () -> Unit,
     onBack: () -> Unit,
     onExtract: () -> Unit,
+    plannedEngine: ExtractionEngine,
+    fallbackEngine: ExtractionEngine,
+    usedEngine: ExtractionEngine?,
     paddingValues: PaddingValues
 ) {
     BackHandler {
@@ -1032,6 +1052,14 @@ fun UploadScreen(
                         }
                     }
                 }
+            }
+
+            item {
+                ExtractionEngineBadge(
+                    plannedEngine = plannedEngine,
+                    fallbackEngine = fallbackEngine,
+                    usedEngine = usedEngine
+                )
             }
 
             item {
@@ -1105,6 +1133,59 @@ fun UploadScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ExtractionEngineBadge(
+    plannedEngine: ExtractionEngine,
+    fallbackEngine: ExtractionEngine,
+    usedEngine: ExtractionEngine?
+) {
+    val engine = usedEngine ?: plannedEngine
+    val localFirst = usedEngine == null && engine == ExtractionEngine.LAPTOP
+    val label = if (localFirst) {
+        stringResource(R.string.engine_laptop_fallback, engineName(fallbackEngine))
+    } else {
+        engineName(engine)
+    }
+    val subtitle = when {
+        usedEngine != null -> stringResource(R.string.engine_genutzt)
+        localFirst -> stringResource(R.string.engine_plan_lokal)
+        else -> stringResource(R.string.engine_plan_cloud)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(BgSurface)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(engineEmoji(engine), fontSize = 16.sp)
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.erkennung_ueber, label),
+                color = TextSecondary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Text(subtitle, color = TextTertiary, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun engineName(engine: ExtractionEngine): String = when (engine) {
+    ExtractionEngine.LAPTOP -> stringResource(R.string.engine_laptop)
+    ExtractionEngine.NVIDIA -> stringResource(R.string.engine_nvidia)
+    ExtractionEngine.GEMINI -> stringResource(R.string.engine_gemini)
+}
+
+private fun engineEmoji(engine: ExtractionEngine): String = when (engine) {
+    ExtractionEngine.LAPTOP -> "🖥️"
+    ExtractionEngine.NVIDIA -> "🟣"
+    ExtractionEngine.GEMINI -> "🔹"
 }
 
 @Composable
