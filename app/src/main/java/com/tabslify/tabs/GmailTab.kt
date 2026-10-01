@@ -1,5 +1,6 @@
 package com.tabslify.tabs
 
+import android.app.NotificationManager
 import android.content.Context
 import android.text.Html
 import android.widget.Toast
@@ -69,6 +70,8 @@ import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import com.tabslify.R
 import com.tabslify.core.objects.Config
+import com.tabslify.core.objects.cancelOrphanedEmailNotifications
+import com.tabslify.core.objects.emailNotificationId
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.SharedViewModel
@@ -199,6 +202,7 @@ fun GmailTabContent(
         errorMsg = null
         try {
             val fresh = loadEmailRows().map { it.toItem(context) }
+            cancelOrphanedEmailNotifications(context, fresh.map { it.account to it.id })
             val freshById = fresh.associateBy { it.account to it.id }
             val updated = allEmails.mapNotNull { existing ->
                 freshById[existing.account to existing.id]
@@ -251,6 +255,8 @@ fun GmailTabContent(
         scope.launch {
             try {
                 deleteEmailRow(email.account, email.id)
+                val manager = context.getSystemService(NotificationManager::class.java)
+                manager?.cancel(Config.EMAIL_NOTIF_TAG, emailNotificationId(email.account, email.id))
                 Toast.makeText(context, geloeschtMsg, Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {
                 allEmails = before
