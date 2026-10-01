@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
@@ -86,6 +87,7 @@ import com.mikepenz.markdown.compose.elements.MarkdownBlockQuote
 import com.mikepenz.markdown.m3.Markdown
 import com.tabslify.R
 import com.tabslify.tabs.mediaplayer.Episode
+import com.tabslify.tabs.mediaplayer.PodcastDownloadProgress
 import com.tabslify.tabs.mediaplayer.PodcastFeed
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -406,8 +408,11 @@ fun FeedCard(
     onToggleExpand: () -> Unit,
     onToggleFav: () -> Unit,
     onDownload: (String, String) -> Unit,
+    onRemoveDownload: (String, String) -> Unit,
     onStream: (String) -> Unit,
     newAudioUrls: Set<String> = emptySet(),
+    downloadedAudioUrls: Set<String> = emptySet(),
+    activeDownloads: Map<String, PodcastDownloadProgress> = emptyMap(),
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -539,17 +544,59 @@ fun FeedCard(
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
-                            OutlinedIconButton(
-                                onClick = { onDownload(ep.audioUrl, ep.title) },
-                                modifier = Modifier.size(36.dp),
-                                border = BorderStroke(1.dp, Color.White.copy(0.15f))
-                            ) {
-                                Icon(
-                                    Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    tint = Color(0xFFE8622A),
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            val active = activeDownloads[ep.audioUrl]
+                            if (ep.audioUrl in downloadedAudioUrls) {
+                                OutlinedIconButton(
+                                    onClick = { onRemoveDownload(ep.audioUrl, ep.title) },
+                                    modifier = Modifier.size(36.dp),
+                                    border = BorderStroke(1.dp, Color.White.copy(0.15f))
+                                ) {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color(0xFFE8622A),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            } else if (active != null) {
+                                Box(
+                                    modifier = Modifier.size(36.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (active.percent >= 0) {
+                                        CircularProgressIndicator(
+                                            progress = { active.percent / 100f },
+                                            modifier = Modifier.size(26.dp),
+                                            strokeWidth = 2.5.dp,
+                                            color = Color(0xFFE8622A),
+                                            trackColor = Color.White.copy(0.12f)
+                                        )
+                                        Text(
+                                            "${active.percent}",
+                                            fontSize = 9.sp,
+                                            color = Color.White
+                                        )
+                                    } else {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            strokeWidth = 2.5.dp,
+                                            color = Color(0xFFE8622A)
+                                        )
+                                    }
+                                }
+                            } else {
+                                OutlinedIconButton(
+                                    onClick = { onDownload(ep.audioUrl, ep.title) },
+                                    modifier = Modifier.size(36.dp),
+                                    border = BorderStroke(1.dp, Color.White.copy(0.15f))
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        tint = Color(0xFFE8622A),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                         if (idx < feedEpisodes.lastIndex) {
