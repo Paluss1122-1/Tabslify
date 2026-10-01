@@ -14,6 +14,8 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.edit
+import com.tabslify.core.functions.markPodcastEpisodeDownloaded
+import com.tabslify.core.functions.podcastDownloadPrefs
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.tNotify
 import com.tabslify.services.MediaPlayerService
@@ -199,13 +201,14 @@ class FinishedPdDownload : BroadcastReceiver() {
         val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
         if (downloadId == -1L) return
 
-        val prefs = context.getSharedPreferences("podcast_downloads", MODE_PRIVATE)
+        val prefs = podcastDownloadPrefs(context)
         val pendingJson = prefs.getString("pending_$downloadId", null) ?: return
         prefs.edit { remove("pending_$downloadId") }
 
         val obj = JSONObject(pendingJson)
         val safeTitle = obj.getString("safeTitle")
         val showName = obj.getString("showName")
+        val audioUrl = obj.optString("audioUrl")
 
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val cursor = dm.query(DownloadManager.Query().setFilterById(downloadId))
@@ -213,6 +216,9 @@ class FinishedPdDownload : BroadcastReceiver() {
             if (cursor.moveToFirst()) {
                 val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                 if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                    if (audioUrl.isNotEmpty()) {
+                        markPodcastEpisodeDownloaded(context, audioUrl)
+                    }
                     PodcastShowManager.init(context)
                     val show = PodcastShowManager.getShows()
                         .find { it.name.equals(showName, ignoreCase = true) }
