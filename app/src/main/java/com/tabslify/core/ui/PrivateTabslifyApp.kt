@@ -166,6 +166,7 @@ import com.tabslify.privatetabslifyapp.getLocalFileWithPath
 import com.tabslify.privatetabslifyapp.getMimeType
 import com.tabslify.privatetabslifyapp.isImageFile
 import com.tabslify.privatetabslifyapp.isOnline
+import com.tabslify.remote.DevRemoteDesktopTabContent
 import com.tabslify.tabs.ApkmInstallerTabContent
 import com.tabslify.tabs.BrowserTabContent
 import com.tabslify.tabs.CalendarTabContent
@@ -181,7 +182,6 @@ import com.tabslify.tabs.NotizenApp
 import com.tabslify.tabs.OtherBucketViewer
 import com.tabslify.tabs.PCManagerTab
 import com.tabslify.tabs.QuickSettingsTabContent
-import com.tabslify.tabs.RemoteDesktopTabContent
 import com.tabslify.tabs.WeatherTabContent
 import com.tabslify.tabs.aitab.AITabContent
 import com.tabslify.tabs.audiorecordertab.AudioRecorderTab
@@ -338,7 +338,7 @@ enum class MenuItem(
     REMOTEDESKTOP(
         R.string.remote_desktop,
         "🖥️",
-        { RemoteDesktopTabContent() }
+        { DevRemoteDesktopTabContent() }
     ),
     HEISE_NEWS(
         R.string.heise_news,
