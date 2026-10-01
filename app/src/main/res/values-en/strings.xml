@@ -66,7 +66,6 @@
     <string name="so_funktioniert_die_karte_1">How the map works:\n\n1. Allow location access – every area you pass by is automatically marked as „explored“ and colored blue.\n2. Tracking runs in the background.\n3. At the top you see your statistics (explored areas, share, today) and the current tracker status.\n5. Long-press a blue area to mark it as unvisited again.</string>
     <string name="so_bedienst_du_den_kalender">How to use the calendar:\n\n1. Swipe between the weeks or months to navigate.\n2. Tap a day to see its appointments.\n3. Tap the plus icon to create a new event.\n4. Tap an appointment to edit or delete it.</string>
     <string name="so_bedienst_du_die_fernsteuerung">How to use the remote control:\n\n1. Make sure your PC is paired and on the same network.\n2. Connect using the Connect button.\n3. Control mouse and keyboard via the screen area and the input bar.</string>
-    <string name="so_bedienst_du_die_podcasts">How to use the podcasts:\n\n1. Search for a podcast and tap the star.\n2. Pick an episode from the list to play it.\n3. Use play/pause and the skip buttons to control playback.\n\nNew episodes of starred shows are loaded automatically every day at 3 PM.</string>
     <string name="so_bedienst_du_die_news">How to use the news:\n\n1. Scroll through the current reports.\n2. Tap a headline to open the full article.\n3. Pull the list down to load new reports.</string>
     <string name="so_bedienst_du_den_pc">How to use the PC manager:\n\n1. Make sure your PC is paired and reachable.\n2. View your PC\'s status and files.\n3. Pick a command to send it to the PC.</string>
     <string name="so_bedienst_du_den_apkm">How to use the APKM installer:\n\n1. Tap „Select file“ and find the .apkm package.\n2. Confirm the selection to start the installation.\n3. Follow the system prompt to install the split APKs.</string>
@@ -1102,6 +1101,8 @@
     <string name="ohne_titel">Untitled</string>
     <string name="datei_existiert_bereits">File already exists</string>
     <string name="aus_favoriten_entfernen">Remove from favorites?</string>
+    <string name="episode_vom_handy_loeschen">Delete episode from phone?</string>
+    <string name="episode_wird_vom_handy_geloescht">\"%1$s\" will be deleted from the phone and can be downloaded again.</string>
     <string name="wird_aus_deinen_lieblings_podcasts">\"%1$s\" will be removed from your favorite podcasts.</string>
     <string name="podcast_suchen_oder_url_eingeben">Search a podcast or enter a URL…</string>
     <string name="url_eingeben_und_download_starten">Enter a URL and start the download</string>
