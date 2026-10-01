@@ -107,6 +107,7 @@ import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
 import com.tabslify.core.ui.TextTertiary
 import com.tabslify.core.ui.calloutAwareMarkdownComponents
+import com.tabslify.core.ui.normalizeCallouts
 import com.tabslify.quiethoursnotificationhelper.AiProvider
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import io.github.jan.supabase.storage.storage
@@ -175,6 +176,8 @@ fun MaterialienScreen(
     val dateiNichtErreichbar = stringResource(R.string.datei_nicht_erreichbar)
     val ocrFehlgeschlagen = stringResource(R.string.ocr_fehlgeschlagen)
     val summaryFehlgeschlagen = stringResource(R.string.summary_fehlgeschlagen)
+    val zusammenfassungTitel = stringResource(R.string.ai_zusammenfassung)
+    val kopiertHinweis = stringResource(R.string.kopiert, zusammenfassungTitel)
 
     var aiSummaryStates by remember { mutableStateOf<Map<String, AiSummaryState>>(emptyMap()) }
 
@@ -440,7 +443,14 @@ fun MaterialienScreen(
 
                     4. **Spickzettel & Aha-Momente (Kritische Punkte)**
                        - Fasse die 3 bis 5 absolut kritischen Erkenntnisse prägnant zusammen.
-                       - **STYLING-VORGABE:** Nutze für besonders einprägsame Sachen, typische Klausur-Stolperfallen, Definitionen oder extrem wichtige Merksätze sehr gerne Markdown-Callouts wie `> [!warning]` oder `[!warning] Text` (bzw. passende Varianten wie `[!info]`), damit diese optisch sofort aus dem Text hervorstechen.
+                       - **STYLING-PFLICHT:** Setze jeden dieser Punkte als Markdown-Callout, damit er optisch sofort aus dem Fließtext hervorsticht. Erlaubte Typen sind ausschließlich:
+                         * `[!warning]` — typische Klausur-Stolperfallen, verbreitete Fehlvorstellungen
+                         * `[!danger]` — Fehler, an denen eine Lösung direkt kippt
+                         * `[!info]` — Definitionen, Einordnung, Kontext
+                         * `[!tip]` — Lerntipp, Eselsbrücke, Merktrick
+                         * `[!note]` — zusätzliches Hintergrundwissen
+                         * `[!success]` — sicheres Merkwissen, Checklistenpunkt
+                       - Syntax: `> [!warning] Text`. Jede Folgezeile eines Callouts wird ebenfalls mit `> ` beginnen. Andere Typen nicht verwenden, Callouts nicht ineinander verschachteln, nicht in Aufzählungen einrücken und nicht als `> [!warning]` ohne anschließenden Text stehen lassen.
 
                     5. **Selbstcheck (Aktivierung des Gelernten)**
                        - Beende den Text mit 2 kurzen, reflexiven Fragen (ohne direkt die Antwort zu verraten), mit denen die Lernenden selbst prüfen können, ob sie den Kern der Sache verstanden haben.
@@ -870,6 +880,7 @@ fun MaterialienScreen(
 
         val currentState = aiSummaryStates[fileKey] ?: AiSummaryState()
         val aiSummary = currentState.summary
+        val aiSummaryMarkdown = remember(aiSummary) { aiSummary?.let(::normalizeCallouts) ?: "" }
         val summaryLoading = currentState.loading
         val analysisStarted = currentState.analysisStarted
 
@@ -1118,7 +1129,7 @@ fun MaterialienScreen(
                                                     .verticalScroll(rememberScrollState())
                                             ) {
                                                 Markdown(
-                                                    content = aiSummary,
+                                                    content = aiSummaryMarkdown,
                                                     colors = markdownColor(text = TextPrimary),
                                                     typography = markdownTypography(
                                                         h1 = TextStyle(
@@ -1197,7 +1208,7 @@ fun MaterialienScreen(
                     .fillMaxSize()
                     .background(BgSurface)
             ) {
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1229,13 +1240,10 @@ fun MaterialienScreen(
                                     onClick = {
                                         val clipboard =
                                             context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val label = context.getString(R.string.ai_zusammenfassung)
-                                        clipboard.setPrimaryClip(ClipData.newPlainText(label, aiSummary))
-                                        Toast.makeText(
-                                            context,
-                                            context.getString(R.string.kopiert, label),
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        clipboard.setPrimaryClip(
+                                            ClipData.newPlainText(zusammenfassungTitel, aiSummary)
+                                        )
+                                        Toast.makeText(context, kopiertHinweis, Toast.LENGTH_SHORT).show()
                                     }
                                 ) {
                                     Icon(
@@ -1255,12 +1263,6 @@ fun MaterialienScreen(
                                     }
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
-                                Text(
-                                    stringResource(R.string.aktualisieren_2),
-                                    color = AccentViolet,
-                                    fontSize = 7.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
                                 Icon(
                                     Icons.Default.Refresh,
                                     contentDescription = stringResource(R.string.reanalyze_picture),
@@ -1279,7 +1281,7 @@ fun MaterialienScreen(
                         if (aiSummary != null) {
                             SelectionContainer {
                                 Markdown(
-                                    content = aiSummary,
+                                    content = aiSummaryMarkdown,
                                     colors = markdownColor(text = TextPrimary),
                                     typography = markdownTypography(
                                         h1 = TextStyle(
