@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
@@ -77,6 +78,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,6 +88,8 @@ import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownBlockQuote
 import com.mikepenz.markdown.m3.Markdown
 import com.tabslify.R
+import com.tabslify.core.functions.podcastEpisodeFileName
+import com.tabslify.core.functions.podcastFileCompletionKey
 import com.tabslify.tabs.mediaplayer.Episode
 import com.tabslify.tabs.mediaplayer.PodcastDownloadProgress
 import com.tabslify.tabs.mediaplayer.PodcastFeed
@@ -409,10 +413,11 @@ fun FeedCard(
     onToggleFav: () -> Unit,
     onDownload: (String, String) -> Unit,
     onRemoveDownload: (String, String) -> Unit,
-    onStream: (String) -> Unit,
+    onStream: (String, String) -> Unit,
     newAudioUrls: Set<String> = emptySet(),
     downloadedAudioUrls: Set<String> = emptySet(),
     activeDownloads: Map<String, PodcastDownloadProgress> = emptyMap(),
+    completedKeys: Set<String> = emptySet(),
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -532,8 +537,20 @@ fun FeedCard(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val isDownloaded = ep.audioUrl in downloadedAudioUrls
+                            val isFinished = !isDownloaded &&
+                                    (ep.audioUrl in completedKeys ||
+                                            podcastFileCompletionKey(podcastEpisodeFileName(ep.title)) in completedKeys)
+                            if (isFinished) {
+                                Icon(
+                                    Icons.Default.DoneAll,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4A4850),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                             OutlinedIconButton(
-                                onClick = { onStream(ep.audioUrl) },
+                                onClick = { onStream(ep.audioUrl, ep.title) },
                                 modifier = Modifier.size(36.dp),
                                 border = BorderStroke(1.dp, Color.White.copy(0.15f))
                             ) {
