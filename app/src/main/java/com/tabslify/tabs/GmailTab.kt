@@ -182,6 +182,7 @@ fun GmailTabContent(
     }
     val scope = rememberCoroutineScope()
     val pendingEmailOpen by svm.pendingEmailOpen.collectAsState()
+    val appliedEmailOpen by svm.appliedEmailOpen.collectAsState()
 
     var allEmails by remember { mutableStateOf<List<EmailItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -226,13 +227,14 @@ fun GmailTabContent(
         reload()
     }
 
-    LaunchedEffect(allEmails, pendingEmailOpen) {
+    LaunchedEffect(pendingEmailOpen, appliedEmailOpen, allEmails) {
         val target = pendingEmailOpen ?: return@LaunchedEffect
+        if (appliedEmailOpen == target) return@LaunchedEffect
+        if (selectedEmail != null) return@LaunchedEffect
         val (account, uid) = target
-        allEmails.find { it.account == account && it.id == uid }?.let { match ->
-            selectedEmail = match
-            svm.setPendingEmailOpen(null)
-        }
+        val match = allEmails.find { it.account == account && it.id == uid } ?: return@LaunchedEffect
+        svm.markEmailOpenApplied(target)
+        selectedEmail = match
     }
 
     val accounts = remember(allEmails) { allEmails.map { it.account }.distinct().sorted() }
@@ -306,7 +308,10 @@ fun GmailTabContent(
                         EmailList(
                             emails = emails,
                             listState = listState,
-                            onClick = { selectedEmail = it },
+                            onClick = {
+                                svm.clearPendingEmailOpen()
+                                selectedEmail = it
+                            },
                             onLongClick = { pendingDelete = it }
                         )
                     }
