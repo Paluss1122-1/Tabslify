@@ -1852,6 +1852,7 @@
     <string name="unterstutzung_beim_lernen">Unterstützung beim Lernen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:599 -->
     <string name="set_loschen">Set löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:634 -->
     <string name="wird_geloscht">\"%1$s\" wird gelöscht.</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:635  ||  %1$s=setToDelete!!.name -->
+    <string name="vokabel_loeschen">Vokabel löschen?</string>
     <string name="ubersicht_scannen">Übersicht &amp; Scannen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:645 -->
     <string name="scannen">Scannen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:678 -->
     <string name="noch_keine_sets">Noch keine Sets</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:697 -->
@@ -1891,6 +1892,10 @@
     <string name="de_la">DE → LA </string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1515 -->
     <string name="la_de">LA → DE </string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1515 -->
     <string name="navigate_to_review_screen">Navigate to Review Screen </string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1530 -->
+    <string name="zufaellige_reihenfolge">Zufällige Reihenfolge</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1737 -->
+    <string name="reihenfolge_wechseln">Reihenfolge wechseln?</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:2055 -->
+    <string name="reihenfolge_wechseln_text">Die laufende Session beginnt neu. Bis dahin abgefragte Karten werden nicht mehr gewertet.</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:2056 -->
+    <string name="neu_starten">Neu starten</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:2057 -->
     <string name="tippe_zum_aufdecken">Tippe zum Aufdecken</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1598 -->
     <string name="falsch">Falsch</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1669 | VocabTab.kt:1754 -->
     <string name="richtig">Richtig</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1701 | VocabTab.kt:1745 -->
@@ -2990,4 +2995,7 @@
     <string name="ai_notify_unvollstaendig">Bitte alle Fragen beantworten</string>
     <string name="ai_notify_eigene_antwort">Eigene Antwort</string>
     <string name="ai_notify_quelle">von %1$s</string>
+    <string name="bluetooth_noch_an">Bluetooth ist noch an</string>
+    <string name="bluetooth_noch_an_text">%1$s wird nicht mehr gebraucht - Bluetooth kann wieder aus</string>
+    <string name="bluetooth_ausschalten">Ausschalten</string>
 </resources>

@@ -1149,6 +1149,7 @@
     <string name="unterstutzung_beim_lernen">Support while learning</string>
     <string name="set_loschen">Delete set?</string>
     <string name="wird_geloscht">\"%1$s\" will be deleted.</string>
+    <string name="vokabel_loeschen">Delete word?</string>
     <string name="ubersicht_scannen">Overview &amp; scanning</string>
     <string name="scannen">Scan</string>
     <string name="noch_keine_sets">No sets yet</string>
@@ -1188,6 +1189,10 @@
     <string name="de_la">DE → LA </string>
     <string name="la_de">LA → DE </string>
     <string name="navigate_to_review_screen">Navigate to Review Screen </string>
+    <string name="zufaellige_reihenfolge">Random order</string>
+    <string name="reihenfolge_wechseln">Change order?</string>
+    <string name="reihenfolge_wechseln_text">The current session restarts from the beginning. Cards answered so far are discarded.</string>
+    <string name="neu_starten">Restart</string>
     <string name="tippe_zum_aufdecken">Tap to reveal</string>
     <string name="falsch">Wrong</string>
     <string name="richtig">Correct</string>
@@ -2276,4 +2281,7 @@
     <string name="ai_notify_unvollstaendig">Please answer all questions</string>
     <string name="ai_notify_eigene_antwort">Your answer</string>
     <string name="ai_notify_quelle">from %1$s</string>
+    <string name="bluetooth_noch_an">Bluetooth is still on</string>
+    <string name="bluetooth_noch_an_text">%1$s is no longer needed - Bluetooth can go off again</string>
+    <string name="bluetooth_ausschalten">Turn off</string>
 </resources>
