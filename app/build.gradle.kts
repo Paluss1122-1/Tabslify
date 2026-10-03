@@ -101,8 +101,9 @@ android {
     sourceSets {
         listOf("debug", "fast").forEach { devVariante ->
             getByName(devVariante).apply {
-                java.srcDir("src/dev/java")
-                jniLibs.srcDir("src/dev/jniLibs")
+                java.directories.add("src/dev/java")
+                kotlin.directories.add("src/dev/java")
+                jniLibs.directories.add("src/dev/jniLibs")
             }
         }
     }
