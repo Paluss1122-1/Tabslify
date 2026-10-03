@@ -16,8 +16,21 @@ class SharedViewModel : ViewModel() {
     private val _pendingEmailOpen = MutableStateFlow<Pair<String, String>?>(null)
     val pendingEmailOpen = _pendingEmailOpen
 
+    private val _appliedEmailOpen = MutableStateFlow<Pair<String, String>?>(null)
+    val appliedEmailOpen = _appliedEmailOpen
+
     fun setPendingEmailOpen(value: Pair<String, String>?) {
+        _appliedEmailOpen.value = null
         _pendingEmailOpen.value = value
+    }
+
+    fun markEmailOpenApplied(value: Pair<String, String>) {
+        _appliedEmailOpen.value = value
+    }
+
+    fun clearPendingEmailOpen() {
+        _appliedEmailOpen.value = null
+        _pendingEmailOpen.value = null
     }
 
     private val _pendingAiSession = MutableStateFlow<String?>(null)
