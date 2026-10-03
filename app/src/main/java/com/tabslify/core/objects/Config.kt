@@ -192,6 +192,7 @@ object Config {
     const val MEDIA_PLAYER = 50000
     const val BLOCKED_MESSAGES = 60000
     const val EXPLORE_TRACKING = 80000
+    const val EMAIL_NOTIF_TAG = "email"
 
     @Suppress("unused")
     fun sendBridgeCommand(context: Context, json: String) {
@@ -518,5 +519,18 @@ fun tNotify(ctx: Context, notificationId: Int, notification: Any, tag: String? =
         notificationManager?.notify(notificationId, resolvedNotification)
     } else {
         notificationManager?.notify(tag, notificationId, resolvedNotification)
+    }
+}
+
+fun emailNotificationId(account: String, uid: String): Int = "$account/$uid".hashCode()
+
+fun cancelOrphanedEmailNotifications(context: Context, existing: List<Pair<String, String>>) {
+    val manager = context.getSystemService(NotificationManager::class.java) ?: return
+    val keep = hashSetOf<Int>()
+    for ((account, uid) in existing) keep.add(emailNotificationId(account, uid))
+    for (sbn in manager.activeNotifications) {
+        val tag = sbn.tag ?: continue
+        if (tag != Config.EMAIL_NOTIF_TAG || keep.contains(sbn.id)) continue
+        manager.cancel(tag, sbn.id)
     }
 }
