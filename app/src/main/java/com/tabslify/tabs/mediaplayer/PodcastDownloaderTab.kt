@@ -1,8 +1,10 @@
 package com.tabslify.tabs.mediaplayer
 
 import android.app.DownloadManager
+import android.content.ContentUris
 import android.content.Context
 import android.os.Environment
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +37,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,18 +58,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tabslify.R
+import com.tabslify.core.functions.clearPodcastEpisodeDownloaded
 import com.tabslify.core.functions.errorInsert
 import com.tabslify.core.functions.fetchPodcastFeed
 import com.tabslify.core.functions.isUnseenPodcastEpisode
 import com.tabslify.core.functions.loadCachedNewEpisodes
+import com.tabslify.core.functions.loadDownloadedPodcastFiles
+import com.tabslify.core.functions.loadDownloadedPodcastUrls
+import com.tabslify.core.functions.loadPodcastCompletions
+import com.tabslify.core.functions.loadPendingPodcastDownloads
 import com.tabslify.core.functions.loadPodcastSeenAt
 import com.tabslify.core.functions.markPodcastEpisodeDownloaded
 import com.tabslify.core.functions.markPodcastSeen
 import com.tabslify.core.functions.podcastCheckIsFresh
 import com.tabslify.core.functions.podcastDownloadPrefs
+import com.tabslify.core.functions.podcastDestDir
+import com.tabslify.core.functions.podcastEpisodeFileName
 import com.tabslify.core.functions.podcastFavPrefs
 import com.tabslify.core.functions.readPodcastEpisodes
 import com.tabslify.core.functions.runPodcastCheck
+import com.tabslify.core.functions.syncPodcastProgress
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.FeedCard
@@ -80,10 +91,12 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
+import java.io.File
 import java.time.Instant
 
 data class PodcastFeed(
@@ -102,6 +115,71 @@ data class Episode(
 data class SearchResult(
     val feed: PodcastFeed
 )
+
+data class PodcastDownloadProgress(
+    val percent: Int
+)
+
+private fun deletePodcastMedia(context: Context, fileName: String): Boolean {
+    val resolver = context.contentResolver
+    val viaMediaStore = runCatching {
+        resolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.Audio.Media._ID),
+            "${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
+            arrayOf(fileName),
+            null
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            var deleted = false
+            while (cursor.moveToNext()) {
+                val uri = ContentUris.withAppendedId(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, cursor.getLong(idCol)
+                )
+                deleted = runCatching { resolver.delete(uri, null, null) > 0 }.getOrDefault(false) ||
+                        deleted
+            }
+            deleted
+        } ?: false
+    }.getOrDefault(false)
+    if (viaMediaStore) return true
+    return runCatching { File(podcastDestDir(), fileName).delete() }.getOrDefault(false)
+}
+
+private suspend fun queryPodcastDownloadProgress(
+    context: Context,
+    entries: Map<Long, String>
+): Pair<Map<String, PodcastDownloadProgress>, Set<Long>> = withContext(Dispatchers.IO) {
+    val progress = mutableMapOf<String, PodcastDownloadProgress>()
+    val finished = mutableSetOf<Long>()
+    if (entries.isEmpty()) return@withContext progress to finished
+
+    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    val seen = mutableSetOf<Long>()
+    dm.query(DownloadManager.Query().setFilterById(*entries.keys.toLongArray()))?.use { cursor ->
+        val idCol = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
+        val statusCol = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+        val soFarCol = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+        val totalCol = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+        while (cursor.moveToNext()) {
+            val downloadId = if (idCol >= 0) cursor.getLong(idCol) else -1L
+            val audioUrl = entries[downloadId] ?: continue
+            seen += downloadId
+            val status =
+                if (statusCol >= 0) cursor.getInt(statusCol) else DownloadManager.STATUS_PENDING
+            if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
+                finished += downloadId
+                continue
+            }
+            val soFar = if (soFarCol >= 0) cursor.getLong(soFarCol) else -1L
+            val total = if (totalCol >= 0) cursor.getLong(totalCol) else -1L
+            val percent = if (total > 0L) ((soFar * 100L) / total).toInt().coerceIn(0, 100) else -1
+            progress[audioUrl] = PodcastDownloadProgress(percent)
+        }
+    }
+    finished += entries.keys - seen
+    progress to finished
+}
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -162,11 +240,30 @@ fun PodcastTab() {
     var episodes by remember { mutableStateOf<Map<String, List<Episode>>>(emptyMap()) }
     var loadingEpisodes by remember { mutableStateOf<String?>(null) }
     var feedToUnfav by remember { mutableStateOf<PodcastFeed?>(null) }
+    var episodeToDelete by remember { mutableStateOf<Pair<String, String>?>(null) }
     var newEpisodesState by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var seenAtState by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
+    var downloadedUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var downloadedFiles by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var activeDownloads by remember { mutableStateOf<Map<String, PodcastDownloadProgress>>(emptyMap()) }
+    var completedKeys by remember {
+        mutableStateOf<Set<String>>(loadPodcastCompletions(context.applicationContext).keys)
+    }
+    val pendingDownloadIds = remember { mutableStateMapOf<Long, String>() }
+
+    suspend fun loadDownloaded() {
+        val appContext = context.applicationContext
+        downloadedUrls = withContext(Dispatchers.IO) { loadDownloadedPodcastUrls(appContext) }
+        downloadedFiles = loadDownloadedPodcastFiles()
+    }
 
     LaunchedEffect(Unit) {
         val appContext = context.applicationContext
+        loadDownloaded()
+        completedKeys = runCatching { syncPodcastProgress(appContext) }.getOrDefault(completedKeys)
+        pendingDownloadIds.putAll(withContext(Dispatchers.IO) {
+            loadPendingPodcastDownloads(appContext)
+        })
         val snapshot = withContext(Dispatchers.IO) {
             Triple(
                 loadCachedNewEpisodes(appContext),
@@ -191,6 +288,25 @@ fun PodcastTab() {
             return@LaunchedEffect
         }
         newEpisodesState = found
+    }
+
+    val hasPendingDownloads = pendingDownloadIds.isNotEmpty()
+
+    LaunchedEffect(hasPendingDownloads) {
+        if (!hasPendingDownloads) return@LaunchedEffect
+        val appContext = context.applicationContext
+        while (true) {
+            val (progress, finished) =
+                queryPodcastDownloadProgress(appContext, pendingDownloadIds.toMap())
+            activeDownloads = progress
+            if (finished.isNotEmpty()) {
+                finished.forEach { pendingDownloadIds.remove(it) }
+                loadDownloaded()
+            }
+            if (pendingDownloadIds.isEmpty()) break
+            delay(600)
+        }
+        activeDownloads = emptyMap()
     }
 
     val isUrl = remember(query) {
@@ -306,6 +422,7 @@ fun PodcastTab() {
         if (alreadyDone) {
             Toast.makeText(context, fileExistsMsg, Toast.LENGTH_SHORT).show()
             markPodcastEpisodeDownloaded(context.applicationContext, audioUrl)
+            downloadedUrls = loadDownloadedPodcastUrls(context.applicationContext)
             return
         }
 
@@ -327,11 +444,44 @@ fun PodcastTab() {
             }.toString())
         }
 
+        pendingDownloadIds[downloadId] = audioUrl
+        activeDownloads = activeDownloads + (audioUrl to PodcastDownloadProgress(-1))
+
         Toast.makeText(context, downloadStartedMsg, Toast.LENGTH_SHORT).show()
     }
 
-    fun streamEpisode(audioUrl: String) {
-        MediaPlayerService.streamRemote(context, audioUrl)
+    fun streamEpisode(audioUrl: String, title: String) {
+        val fileName = podcastEpisodeFileName(title)
+        val isLocal = (audioUrl in downloadedUrls || fileName in downloadedFiles) &&
+                MediaPlayerService.hasAudioPermission(context)
+        if (isLocal) MediaPlayerService.playLocalPodcast(context, fileName, audioUrl)
+        else MediaPlayerService.streamRemote(context, audioUrl)
+    }
+
+    suspend fun removeDownloadedEpisode(audioUrl: String, title: String) {
+        val fileName = podcastEpisodeFileName(title)
+        val appContext = context.applicationContext
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        withContext(Dispatchers.IO) {
+            val knownIds = dm.query(
+                DownloadManager.Query().setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)
+            )?.use { cursor ->
+                val titleCol = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE)
+                val idCol = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
+                val ids = mutableListOf<Long>()
+                while (cursor.moveToNext()) {
+                    if (titleCol >= 0 && cursor.getString(titleCol) == fileName && idCol >= 0) {
+                        ids += cursor.getLong(idCol)
+                    }
+                }
+                ids
+            } ?: emptyList()
+            knownIds.forEach { dm.remove(it) }
+            deletePodcastMedia(appContext, fileName)
+        }
+        clearPodcastEpisodeDownloaded(appContext, audioUrl)
+        activeDownloads = activeDownloads - audioUrl
+        loadDownloaded()
     }
 
     val scope = rememberCoroutineScope()
@@ -380,6 +530,19 @@ fun PodcastTab() {
             title = stringResource(R.string.aus_favoriten_entfernen),
             text = stringResource(R.string.wird_aus_deinen_lieblings_podcasts, feed.title),
             confirmText = stringResource(R.string.entfernen)
+        )
+    }
+
+    episodeToDelete?.let { (audioUrl, title) ->
+        AlertDialogTabslify(
+            onConfirm = {
+                scope.launch { removeDownloadedEpisode(audioUrl, title) }
+                episodeToDelete = null
+            },
+            onDismiss = { episodeToDelete = null },
+            title = stringResource(R.string.episode_vom_handy_loeschen),
+            text = stringResource(R.string.episode_wird_vom_handy_geloescht, title),
+            confirmText = stringResource(R.string.loschen)
         )
     }
 
@@ -511,6 +674,16 @@ fun PodcastTab() {
                                 .map { it.optString("audioUrl") }.toSet()
                         }
                         val hasNew = newAudioUrls.isNotEmpty() && !isExpanded
+                        val downloadedAudioUrls = remember(
+                            downloadedUrls, downloadedFiles, feedEpisodes
+                        ) {
+                            feedEpisodes.orEmpty()
+                                .filter {
+                                    it.audioUrl in downloadedUrls ||
+                                        podcastEpisodeFileName(it.title) in downloadedFiles
+                                }
+                                .map { it.audioUrl }.toSet()
+                        }
 
                         Box {
                             FeedCard(
@@ -520,7 +693,10 @@ fun PodcastTab() {
                                     if (isExpanded) expandedFeedUrl = null
                                     else {
                                         expandedFeedUrl = feed.feedUrl
-                                        scope.launch { loadEpisodes(feed.feedUrl) }
+                                        scope.launch {
+                                            loadDownloaded()
+                                            loadEpisodes(feed.feedUrl)
+                                        }
                                         val seenMark = newEpisodesState
                                             .filter { it.optString("showName") == feed.title }
                                             .maxOfOrNull { it.optLong("publishedAt") }
@@ -541,8 +717,14 @@ fun PodcastTab() {
                                         feed.title
                                     )
                                 },
-                                onStream = { url -> streamEpisode(url) },
+                                onRemoveDownload = { url, title ->
+                                    episodeToDelete = url to title
+                                },
+                                onStream = { url, title -> streamEpisode(url, title) },
                                 newAudioUrls = newAudioUrls,
+                                downloadedAudioUrls = downloadedAudioUrls,
+                                activeDownloads = activeDownloads,
+                                completedKeys = completedKeys,
                             )
                             if (hasNew) {
                                 Box(
@@ -588,7 +770,10 @@ fun PodcastTab() {
                             }
                         },
                         onDownload = { url, title -> downloadEpisode(url, title, feed.title) },
-                        onStream = { url -> streamEpisode(url) }
+                        onRemoveDownload = { url, title -> episodeToDelete = url to title },
+                        onStream = { url, title -> streamEpisode(url, title) },
+                        activeDownloads = activeDownloads,
+                        completedKeys = completedKeys
                     )
                 }
                 item { Spacer(Modifier.height(16.dp)) }
