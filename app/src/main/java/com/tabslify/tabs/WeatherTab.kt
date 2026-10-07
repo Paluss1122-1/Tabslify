@@ -27,9 +27,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -116,6 +120,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds
 
 @Serializable
@@ -530,7 +537,6 @@ fun WeatherTabContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Transparent)
-                    .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
                 if (error != null) {
@@ -795,7 +801,11 @@ fun BackHintOverlay(onDismiss: () -> Unit) {
 
 @Composable
 fun MainView(data: WeatherData, onDaySelected: (Int) -> Unit) {
-    Column {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+    ) {
         data.days.firstOrNull()?.let { today ->
             Card(
                 modifier = Modifier
@@ -950,44 +960,82 @@ fun getDayName(index: Int): String {
 
 @Composable
 fun DayHoursView(day: DayData, onHourSelected: (HourData) -> Unit) {
-    Column {
-        Text(
-            stringResource(R.string.stunden_fur, day.date),
-            color = Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+    val isToday = remember(day.date) { day.date == LocalDate.now().toString() }
+    val nowLabel = remember(day.date) { LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")) }
+    val currentIndex = remember(day.date, nowLabel) {
+        if (!isToday) -1 else {
+            val next = day.hours.indexOfFirst { it.time >= nowLabel }
+            if (next >= 0) next else day.hours.lastIndex
+        }
+    }
+    val listState = rememberLazyListState()
 
-        day.hours.forEach { hour ->
-            HourCard(hour = hour, onClick = { onHourSelected(hour) })
-            Spacer(Modifier.height(12.dp))
+    LaunchedEffect(day.date, currentIndex) {
+        if (currentIndex > 0) listState.scrollToItem(currentIndex + 1)
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text(
+                stringResource(R.string.stunden_fur, day.date),
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        itemsIndexed(day.hours) { index, hour ->
+            HourCard(
+                hour = hour,
+                isPast = isToday && index < currentIndex,
+                isNow = isToday && index == currentIndex,
+                onClick = { onHourSelected(hour) }
+            )
         }
     }
 }
 
 @Composable
-fun HourCard(hour: HourData, onClick: () -> Unit) {
+fun HourCard(
+    hour: HourData,
+    isPast: Boolean,
+    isNow: Boolean,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E28)),
-        shape = RoundedCornerShape(12.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                isNow -> Color(0xFF262640)
+                isPast -> Color(0xFF181820)
+                else -> Color(0xFF1E1E28)
+            }
+        ),
+        shape = RoundedCornerShape(12.dp),
+        border = if (isNow) BorderStroke(1.dp, Color(0xFF6B6BFF)) else null
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .alpha(if (isPast) 0.4f else 1f)
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                hour.time,
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    hour.time,
+                    color = if (isNow) Color(0xFF8E8EFF) else Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
 
             Text(
                 hour.condition,
@@ -1020,7 +1068,9 @@ fun HourCard(hour: HourData, onClick: () -> Unit) {
 @Composable
 fun SelectedHourView(hour: HourData) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E28)),
         shape = RoundedCornerShape(16.dp)
     ) {
