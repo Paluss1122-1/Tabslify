@@ -13,7 +13,8 @@ sealed class DownloadState {
         val artist: String,
         val album: String,
         val fileName: String,
-        val fileUri: Uri
+        val fileUri: Uri,
+        val note: String? = null
     ) : DownloadState()
 
     data class Error(val message: String) : DownloadState()
