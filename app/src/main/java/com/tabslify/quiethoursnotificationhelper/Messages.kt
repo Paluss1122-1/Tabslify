@@ -255,7 +255,7 @@ fun handleMessageSent(sender: String, messageText: String, context: Context) {
                         )
                     )
                 }
-                val answer = sendAiRequest(appContext, userMessage = trimmed, history = snapshot, target = "notif", serviceKey = "chat")
+                val answer = sendAiRequest(appContext, userMessage = trimmed, history = snapshot, target = AiTarget.NotificationReply, serviceKey = "chat")
                 if (!answer.isNullOrBlank()) {
                     list.add(
                         WhatsAppNotificationListener.Companion.ChatMessage(
