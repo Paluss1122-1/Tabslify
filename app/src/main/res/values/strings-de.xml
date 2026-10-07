@@ -1410,6 +1410,7 @@
     <string name="ubermorgen_2">Übermorgen</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:954 -->
     <string name="tag_2">Tag %1$d</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:955  ||  %1$s=index + 1 -->
     <string name="stunden_fur">Stunden für %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:963  ||  %1$s=day.date -->
+    <string name="jetzt">jetzt</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1042 -->
     <string name="luftfeuchtigkeit">Luftfeuchtigkeit</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1074 -->
     <string name="wind">Wind</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1080 -->
     <string name="luftdruck">Luftdruck</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1081 -->
@@ -1848,6 +1849,36 @@
     <string name="keine_vokabeln_erkannt">Keine Vokabeln erkannt.</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:419 -->
     <string name="schule">Schule</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:505 -->
     <string name="dein_dashboard">Dein Dashboard</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:506 -->
+    <string name="noten">Noten</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:432 -->
+    <string name="noten_uebersicht">Fächer &amp; Durchschnitte</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:433 -->
+    <string name="noten_keine_faecher">Noch keine Fächer</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:447 -->
+    <string name="noten_fach_hinweis">Erstelle ein neues Fach via +</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:453 -->
+    <string name="noten_fach_loeschen">Fach löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:307 -->
+    <string name="noten_fach_umbenennen">Fach umbenennen</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:261 | NotenTab.kt:578 -->
+    <string name="noten_eintrag_hinzufuegen">Note eintragen</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:811 | NotenTab.kt:917 -->
+    <string name="noten_eintrag_loeschen">Note löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:324 -->
+    <string name="noten_note_wird_geloescht">Note %1$s wird gelöscht.</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:326  ||  %1$s=formatNote(eintrag.note, locale) -->
+    <string name="noten_note">Note</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:925 -->
+    <string name="noten_art">Art</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:946 -->
+    <string name="noten_halbjahr">Halbjahr</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:962 -->
+    <string name="noten_halbjahr_1">1. Halbjahr</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:646 | NotenTab.kt:790 | NotenTab.kt:969 -->
+    <string name="noten_halbjahr_2">2. Halbjahr</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:652 | NotenTab.kt:791 | NotenTab.kt:975 -->
+    <string name="noten_ganzes_jahr">Ganzes Jahr</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:640 -->
+    <string name="noten_gruppe_gross">Schulaufgabe</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:209 -->
+    <string name="noten_gruppe_klein">Exen &amp; Tests</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:210 -->
+    <string name="noten_gruppe_muendlich">Mündlich</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:211 -->
+    <string name="noten_aufschluesselung">Gruppen-Schnitte</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:675 -->
+    <string name="noten_gewichte">Gewichte anpassen</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:682 | NotenTab.kt:1027 -->
+    <string name="noten_gewichte_hinweis">Jede Gruppe zählt einzeln, der Gesamtdurchschnitt ist der gewichtete Mittel der Gruppen-Schnitte.</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:1035 -->
+    <string name="noten_durchschnitt">Durchschnitt</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:628 -->
+    <string name="noten_gesamt">Gesamt</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:737 -->
+    <string name="noten_keine_eintraege">Noch keine Noten</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:530 | NotenTab.kt:629 | NotenTab.kt:769 -->
+    <string name="noten_tippe_fuer_note">Tippe + um eine Note einzutragen</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:775 -->
+    <string name="noten_titel_optional">Titel (optional)</string> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:984 -->
+    <plurals name="noten_anzahl"> <!-- app/src/main/java/com/tabslify/tabs/school/NotenTab.kt:532 | NotenTab.kt:708  ||  %1$s=fach.eintraege.size -->
+        <item quantity="one">%1$d Note</item>
+        <item quantity="other">%1$d Noten</item>
+    </plurals>
     <string name="ai_chat">AI Chat</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:593 -->
     <string name="unterstutzung_beim_lernen">Unterstützung beim Lernen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:599 -->
     <string name="set_loschen">Set löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:634 -->
@@ -1892,10 +1923,10 @@
     <string name="de_la">DE → LA </string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1515 -->
     <string name="la_de">LA → DE </string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1515 -->
     <string name="navigate_to_review_screen">Navigate to Review Screen </string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1530 -->
-    <string name="zufaellige_reihenfolge">Zufällige Reihenfolge</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1737 -->
-    <string name="reihenfolge_wechseln">Reihenfolge wechseln?</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:2055 -->
-    <string name="reihenfolge_wechseln_text">Die laufende Session beginnt neu. Bis dahin abgefragte Karten werden nicht mehr gewertet.</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:2056 -->
-    <string name="neu_starten">Neu starten</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:2057 -->
+    <string name="zufaellige_reihenfolge">Zufällige Reihenfolge</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1657 -->
+    <string name="reihenfolge_wechseln">Reihenfolge wechseln?</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1975 -->
+    <string name="reihenfolge_wechseln_text">Die laufende Session beginnt neu. Bis dahin abgefragte Karten werden nicht mehr gewertet.</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1976 -->
+    <string name="neu_starten">Neu starten</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1977 -->
     <string name="tippe_zum_aufdecken">Tippe zum Aufdecken</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1598 -->
     <string name="falsch">Falsch</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1669 | VocabTab.kt:1754 -->
     <string name="richtig">Richtig</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1701 | VocabTab.kt:1745 -->
@@ -1910,6 +1941,30 @@
     <string name="vokabel_sets_mischen">Vokabel-Sets mischen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1899 -->
     <string name="sets_auswahlen_min_2">Sets auswählen (min. 2):</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:1921 -->
     <string name="mischen">Mischen (%1$d)</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:2007  ||  %1$s=selectedSets.size -->
+    <string name="heute_due">Heute fällig</string> <!-- VocabTab.kt:737 -->
+    <plurals name="faellige_vokabeln"> <!-- VocabTab.kt:744  ||  %1$d=faelligGesamt -->
+        <item quantity="one">%1$d Vokabel wartet auf dich</item>
+        <item quantity="other">%1$d Vokabeln warten auf dich</item>
+    </plurals>
+    <string name="alle_faellig">Fällige Vokabeln</string> <!-- VocabTab.kt:1899 -->
+    <string name="alles_gelernt">Alles gelernt, nichts mehr fällig</string> <!-- VocabTab.kt:745 -->
+    <string name="sitzende_vokabeln" tools:ignore="PluralsCandidate">%1$d von %2$d sitzen</string> <!-- VocabTab.kt:926  ||  %1$d=sitzt, %2$d=set.vokabeln.size -->
+    <string name="faellig_kurz">%1$d fällig</string> <!-- VocabTab.kt:934  ||  %1$d=faellig -->
+    <string name="letzte_sitzung">Zuletzt %1$s</string> <!-- VocabTab.kt:943  ||  %1$s=dd.MM. -->
+    <string name="nur_schwache">Nur schwache (%1$d)</string> <!-- VocabTab.kt:1011  ||  %1$d=weakCount -->
+    <string name="modus_auswahl">4 Antworten</string> <!-- VocabTab.kt:1938 -->
+    <string name="modus_tippen">Tippen</string> <!-- VocabTab.kt:1939 -->
+    <string name="modus_aufdecken">Karte</string> <!-- VocabTab.kt:1940 -->
+    <string name="tipp_eingabe">Antwort eintippen</string> <!-- VocabTab.kt:2176 -->
+    <string name="pruefen">Prüfen</string> <!-- VocabTab.kt:2197 -->
+    <string name="richtig_waere">Richtig wäre: %1$s</string> <!-- VocabTab.kt:2236  ||  %1$s=stand.karte.antwort -->
+    <string name="ki_denkt">KI denkt nach…</string> <!-- VocabTab.kt:2524 -->
+    <string name="hinweis_holen">Beispiel laden</string> <!-- VocabTab.kt:2525 -->
+    <string name="hinweis_erneut">Beispiel neu laden</string> <!-- VocabTab.kt:2526 -->
+    <string name="lernzeit">%1$d min</string> <!-- VocabTab.kt:2315  ||  %1$d=dauerMinuten -->
+    <string name="das_kannst_du">Das sitzt jetzt</string> <!-- VocabTab.kt:2362 -->
+    <string name="noch_nichts_sitzt">Noch nichts gefestigt</string> <!-- VocabTab.kt:2368 -->
+    <string name="braucht_nochmal">Braucht nochmal</string> <!-- VocabTab.kt:2381 -->
     <string name="musik_zusammenfassung">Musik-Zusammenfassung</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1826 -->
     <string name="vokabel_vision">Vokabel-Vision</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1830 -->
     <string name="nachrichten_antworten">Nachrichten-Antworten</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1834 -->
