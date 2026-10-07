@@ -18,6 +18,7 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.AI_NOTIFY_C
 import com.tabslify.tabs.ainotify.AI_NOTIFY_CHANNEL
 import com.tabslify.tabs.ainotify.AI_NOTIFY_KIND_CANCEL
 import com.tabslify.tabs.ainotify.AI_NOTIFY_KIND_QUESTIONS
+import com.tabslify.tabs.ainotify.AI_NOTIFY_TAG
 import com.tabslify.tabs.ainotify.AI_NOTIFY_TOPIC
 import com.tabslify.tabs.ainotify.AiNotifyQuestion
 import com.tabslify.tabs.ainotify.AiNotifySession
@@ -118,7 +119,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             AiNotifyStore.markCancelled(appContext, sessionId)
             AiNotifyStore.removeSession(appContext, sessionId)
             val manager = appContext.getSystemService(NotificationManager::class.java)
-            manager?.cancel("ai_notify", sessionId.hashCode())
+            manager?.cancel(AI_NOTIFY_TAG, sessionId.hashCode())
             return
         }
         if (AiNotifyStore.isCancelled(appContext, sessionId)) return
@@ -161,6 +162,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
         if (source.isNotEmpty()) builder.setSubText(source)
-        tNotify(appContext, sessionId.hashCode(), builder.build(), "ai_notify")
+        tNotify(appContext, sessionId.hashCode(), builder.build(), AI_NOTIFY_TAG)
     }
 }
