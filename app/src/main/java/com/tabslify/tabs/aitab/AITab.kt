@@ -484,6 +484,7 @@ fun AITabContent(
                             listOfNotNull(
                                 "Nvidia",
                                 "Gemini",
+                                "OpenRouter",
                                 if (isPrivate) "Server" else null
                             ).forEachIndexed { index, mode ->
                                 val containerColor by animateColorAsState(
@@ -569,6 +570,7 @@ fun AITabContent(
                                                             )?.value
 
                                                             "Gemini" -> null
+                                                            "OpenRouter" -> null
                                                             else -> model.name.substringAfter(":")
                                                         }
                                                     val size =
