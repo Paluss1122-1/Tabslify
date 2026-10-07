@@ -85,7 +85,10 @@ import androidx.work.WorkManager
 import com.tabslify.R
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
+import com.tabslify.core.functions.PODCAST_DOWNLOAD_PREFS
 import com.tabslify.core.functions.errorInsert
+import com.tabslify.core.functions.podcastDestDir
+import com.tabslify.core.functions.runPodcastCheck
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.DEL_GAL_CONF
@@ -95,6 +98,7 @@ import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify
 import com.tabslify.core.ui.getDeviceName
 import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.AiTarget
 import com.tabslify.quiethoursnotificationhelper.AiResponseEntry
 import com.tabslify.quiethoursnotificationhelper.CleanupWorker
 import com.tabslify.quiethoursnotificationhelper.DailySummaryReceiver
@@ -138,30 +142,20 @@ import com.tabslify.tabs.audiorecordertab.AudioForegroundService
 import com.tabslify.tabs.exploretab.ExploreLocationTracker
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager
 import com.tabslify.tabs.mediaplayer.MediaAnalyticsManager.getSessions
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import org.xml.sax.InputSource
 import java.io.File
-import java.io.StringReader
 import java.lang.ref.WeakReference
-import java.net.URL
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.util.Calendar
-import java.util.Locale
 import java.util.concurrent.TimeUnit
-import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -776,7 +770,7 @@ class QuietHoursNotificationService : Service() {
                             if (sessions.isEmpty()) return@launch
 
                             val stats = buildSessionStatsText(sessions)
-                            val result = sendAiRequest(this@QuietHoursNotificationService, userMessage = stats, anlytic = true, serviceKey = "music_summary", provider = AiProvider.NVIDIA, model = "openai/gpt-oss-20b")
+                            val result = sendAiRequest(this@QuietHoursNotificationService, userMessage = stats, target = AiTarget.MusicSummary, serviceKey = "music_summary", provider = AiProvider.NVIDIA, model = "openai/gpt-oss-20b")
                                 ?: return@launch
                             val musicMs =
                                 sessions.filter { it.type == "music" }.sumOf { it.listenedMs }
@@ -1311,158 +1305,63 @@ class QuietHoursNotificationService : Service() {
     }
 
     @SuppressLint("LaunchActivityFromNotification")
-    suspend fun checkPodcastsAndNotify(context: Context, forGui: Boolean = false): List<JSONObject> {
-        val found = mutableListOf<JSONObject>()
-        try {
-            val prefs = context.getSharedPreferences("podcast_favs", MODE_PRIVATE)
-            val raw = prefs.getString("favs", null) ?: return found
-            val favsArr = JSONArray(raw)
-            val prefsDl = context.getSharedPreferences("podcast_downloads", MODE_PRIVATE)
-
-            val threshold = ZonedDateTime.now(ZoneId.systemDefault())
-                .minusDays(7)
-                .withHour(15)
-                .withMinute(30)
-                .withSecond(0)
-                .withNano(0)
-                .toInstant()
-
-            val destDir = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS),
-                "/Tabslify"
-            )
-            destDir.mkdirs()
-
-            val perFeedResults = coroutineScope {
-                (0 until favsArr.length()).map { i ->
-                    async(Dispatchers.IO) {
-                        val feedFound = mutableListOf<JSONObject>()
-                        try {
-                            val o = favsArr.getJSONObject(i)
-                            val feedTitle = o.optString("title")
-                            val feedUrl = o.optString("feedUrl")
-                            if (feedUrl.isEmpty()) return@async feedFound
-
-                            val xml = URL(feedUrl).readText()
-                            val doc = DocumentBuilderFactory.newInstance()
-                                .apply {
-                                    setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-                                    setFeature("http://xml.org/sax/features/external-general-entities", false)
-                                    setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-                                    isExpandEntityReferences = false
-                                }
-                                .newDocumentBuilder()
-                                .parse(InputSource(StringReader(xml)))
-
-                            val items = doc.getElementsByTagName("item")
-                            for (j in 0 until items.length) {
-                                try {
-                                    val item = items.item(j)
-                                    val children = item.childNodes
-                                    var title = ""
-                                    var audioUrl = ""
-                                    var pubDateTxt = ""
-                                    for (k in 0 until children.length) {
-                                        val node = children.item(k)
-                                        when (node.nodeName) {
-                                            "title" -> title = node.textContent.trim()
-                                            "enclosure" -> audioUrl =
-                                                node.attributes?.getNamedItem("url")?.nodeValue ?: ""
-
-                                            "pubDate" -> pubDateTxt = node.textContent.trim()
-                                        }
-                                    }
-
-                                    if (audioUrl.isEmpty()) continue
-
-                                    val pubInstant = try {
-                                        ZonedDateTime.parse(
-                                            pubDateTxt,
-                                            DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(Locale.ENGLISH)
-                                        ).toInstant()
-                                    } catch (_: Exception) {
-                                        try {
-                                            Instant.parse(pubDateTxt)
-                                        } catch (_: Exception) {
-                                            null
-                                        }
-                                    }
-
-                                    if (pubInstant == null) continue
-                                    if (pubInstant <= threshold) continue
-                                    if (prefsDl.getBoolean("dl_$audioUrl", false)) continue
-
-                                    val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
-                                    val filename = "$safeTitle.mp3"
-                                    if (File(destDir, filename).exists()) continue
-
-                                    feedFound.add(JSONObject().apply {
-                                        put("audioUrl", audioUrl)
-                                        put("title", title)
-                                        put("showName", feedTitle)
-                                    })
-                                } catch (_: Exception) {
-                                }
-                            }
-                        } catch (_: Exception) {
-                        }
-                        feedFound
-                    }
-                }.awaitAll()
-            }
-            perFeedResults.forEach { found.addAll(it) }
-
-            if (found.isNotEmpty() && !forGui) {
-                val arr = JSONArray()
-                found.forEach { arr.put(it) }
-
-                val nm = context.getSystemService(NotificationManager::class.java)
-                if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
-                    android.app.NotificationChannel(
-                        PODCAST_CHANNEL_ID,
-                        context.getString(R.string.podcast_check),
-                        NotificationManager.IMPORTANCE_DEFAULT
-                    ).also { nm.createNotificationChannel(it) }
-                }
-
-                val podcastBase = Intent(context, QuietHoursNotificationService::class.java)
-                podcastBase.action = ACTION_PODCAST_DOWNLOAD
-                podcastBase.putExtra("episodes_json", arr.toString())
-                podcastBase.setPackage(context.packageName)
-                val pi = PendingIntent.getService(
-                    context,
-                    PODCAST_NOTIFICATION_ID,
-                    podcastBase,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-
-                val contentText = if (found.size == 1) {
-                    context.getString(R.string.neue_folge, found[0].optString("title"))
-                } else {
-                    context.resources.getQuantityString(R.plurals.neue_folgen_verfugbar, found.size, found.size)
-                }
-
-                val bigText = buildString {
-                    found.forEachIndexed { index, episode ->
-                        if (index > 0) append(", ")
-                        append("📻 ${episode.optString("showName")}: ${episode.optString("title")}")
-                    }
-                }
-
-                val notification = NotificationCompat.Builder(context, PODCAST_CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.ic_menu_save)
-                    .setContentTitle(context.getString(R.string.neue_podcast_folgen_gefunden))
-                    .setContentText(contentText)
-                    .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
-                    .setAutoCancel(true)
-                    .setContentIntent(pi)
-                    .build()
-
-                tNotify(context, PODCAST_NOTIFICATION_ID, notification)
-            }
+    suspend fun checkPodcastsAndNotify(context: Context): List<JSONObject> {
+        val found = try {
+            runPodcastCheck(context)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             reportServiceError("checkPodcastsAndNotify", e)
+            return emptyList()
         }
+        if (found.isEmpty()) return found
+
+        val arr = JSONArray()
+        found.forEach { arr.put(it) }
+
+        val nm = context.getSystemService(NotificationManager::class.java)
+        if (nm.getNotificationChannel(PODCAST_CHANNEL_ID) == null) {
+            android.app.NotificationChannel(
+                PODCAST_CHANNEL_ID,
+                context.getString(R.string.podcast_check),
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).also { nm.createNotificationChannel(it) }
+        }
+
+        val podcastBase = Intent(context, QuietHoursNotificationService::class.java)
+        podcastBase.action = ACTION_PODCAST_DOWNLOAD
+        podcastBase.putExtra("episodes_json", arr.toString())
+        podcastBase.setPackage(context.packageName)
+        val pi = PendingIntent.getService(
+            context,
+            PODCAST_NOTIFICATION_ID,
+            podcastBase,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val contentText = if (found.size == 1) {
+            context.getString(R.string.neue_folge, found[0].optString("title"))
+        } else {
+            context.resources.getQuantityString(R.plurals.neue_folgen_verfugbar, found.size, found.size)
+        }
+
+        val bigText = buildString {
+            found.forEachIndexed { index, episode ->
+                if (index > 0) append(", ")
+                append("📻 ${episode.optString("showName")}: ${episode.optString("title")}")
+            }
+        }
+
+        val notification = NotificationCompat.Builder(context, PODCAST_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_save)
+            .setContentTitle(context.getString(R.string.neue_podcast_folgen_gefunden))
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+
+        tNotify(context, PODCAST_NOTIFICATION_ID, notification)
         return found
     }
 
@@ -1475,16 +1374,15 @@ class QuietHoursNotificationService : Service() {
         try {
             val safeTitle = title.replace(Regex("[/\\\\:*?\"<>|]"), "_")
             val filename = "$safeTitle.mp3"
-            val destDir = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS),
-                "/Tabslify"
-            )
-            destDir.mkdirs()
+            podcastDestDir().mkdirs()
 
             val request = DownloadManager.Request(audioUrl.toUri()).apply {
                 setTitle(filename)
                 setDescription(context.getString(R.string.podcast_wird_heruntergeladen))
-                setDestinationUri(File(destDir, filename).toUri())
+                setDestinationInExternalPublicDir(
+                    Environment.DIRECTORY_PODCASTS,
+                    "Tabslify/$filename"
+                )
                 setAllowedOverMetered(true)
                 addRequestHeader("User-Agent", "Mozilla/5.0")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
@@ -1492,13 +1390,13 @@ class QuietHoursNotificationService : Service() {
             val dm = context.getSystemService(DOWNLOAD_SERVICE) as DownloadManager
             val downloadId = dm.enqueue(request)
 
-            val prefs = context.getSharedPreferences("podcast_downloads", MODE_PRIVATE)
+            val prefs = context.getSharedPreferences(PODCAST_DOWNLOAD_PREFS, MODE_PRIVATE)
             prefs.edit {
                 putString("pending_$downloadId", JSONObject().apply {
                     put("safeTitle", safeTitle)
                     put("showName", showName)
+                    put("audioUrl", audioUrl)
                 }.toString())
-                putBoolean("dl_$audioUrl", true)
             }
         } catch (e: Exception) {
             reportServiceError("startPodcastDownload", e)
