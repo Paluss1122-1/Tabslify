@@ -241,25 +241,11 @@ fun connectBluetoothDevice(
     }
 
     if (!adapter.isEnabled) {
-        @Suppress("DEPRECATION")
-        val enabled = try {
-            adapter.enable()
-        } catch (_: SecurityException) {
-            false
-        }
-        if (!enabled) {
-            onResult?.invoke(false, "Bluetooth konnte nicht eingeschaltet werden")
-            return
-        }
-        var waited = 0L
-        while (!adapter.isEnabled && waited < 10000) {
-            Thread.sleep(200)
-            waited += 200
-        }
-        if (!adapter.isEnabled) {
-            onResult?.invoke(false, "Bluetooth wurde nicht rechtzeitig eingeschaltet")
-            return
-        }
+        onResult?.invoke(
+            false,
+            "Bluetooth ist ausgeschaltet - die App kann es ab Android 13 nicht selbst einschalten"
+        )
+        return
     }
 
     val target = try {
@@ -784,23 +770,8 @@ suspend fun callNvidiaVisionApi(
 
     val scaledBmp = bmp.scaleForApi(1280)
 
-    val prompt = """
-        Look at this vocabulary list image carefully.
-        There are TWO columns: Latin on the LEFT, German on the RIGHT.
-        Each row is one vocabulary entry.
-
-        Rules:
-        - Match each Latin entry with the German entry on the SAME vertical position
-        - Latin entries are on the left half of the image
-        - German entries are on the right half
-        - Ignore page numbers (like "116")
-        - Ignore any repeated/duplicate blocks at bottom
-
-        Return ONLY a JSON array like this (one object per row):
-        [{"latein":"salūtem dīcere (m. Dat.)","deutsch":"(jdn.) grüßen, begrüßen"},{"latein":"gaudium","deutsch":"die Freude"},...]
-
-        No markdown, no explanation, ONLY the JSON array.
-    """.trimIndent()
+    val prompt = "Extrahiere die Vokabelpaare aus diesem Bild als JSON-Array."
+    val systemPrompt = aiSystemPrompt(AiTarget.Vision)
 
     val provider = getPreferredAiProvider(context, "vision")
     val result = try {
@@ -814,6 +785,7 @@ suspend fun callNvidiaVisionApi(
                 context = context,
                 history = emptyList(),
                 userMessage = prompt,
+                target = AiTarget.Vision,
                 model = "meta/llama-3.2-90b-vision-instruct",
                 pic = base64Pic,
                 provider = AiProvider.NVIDIA,
@@ -828,7 +800,7 @@ suspend fun callNvidiaVisionApi(
         } else {
             val model = Firebase.ai(backend = GenerativeBackend.googleAI())
                 .generativeModel("gemini-3-flash-preview")
-            model.generateContentStream(content { image(scaledBmp); text(prompt) })
+            model.generateContentStream(content { image(scaledBmp); text("$systemPrompt\n\n$prompt") })
                 .collect { chunk ->
                     val delta = chunk.text ?: ""
                     if (delta.isNotEmpty()) {
