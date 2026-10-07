@@ -8,7 +8,6 @@ import android.view.MotionEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,9 +18,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -33,11 +41,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -52,6 +64,7 @@ import com.google.android.gms.tasks.Tasks
 import com.tabslify.R
 import com.tabslify.core.objects.Config
 import com.tabslify.core.ui.AlertDialogTabslify
+import com.tabslify.core.ui.DialogTabslify
 import com.tabslify.core.ui.NeonBox
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
@@ -90,6 +103,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
     val scope = rememberCoroutineScope()
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var tileToDelete by remember { mutableStateOf<ExploredTile?>(null) }
+    var showDebug by remember { mutableStateOf(false) }
     var initialCenterDone by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -106,8 +120,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                                 initialCenterDone = true
                             }
                         }
-                } catch (e: SecurityException) {
-                    // Ignore
+                } catch (_: SecurityException) {
                 }
             }
         }
@@ -189,99 +202,80 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                NeonIconButton(
+                    imageVector = Icons.Filled.ChevronLeft,
+                    contentDescription = stringResource(R.string.zuruck),
+                    onClick = { vm.previousDay() }
+                )
                 Text(
-                    text = "◀",
+                    text = dayLabel,
                     color = Color.White,
-                    fontSize = 20.sp,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
-                        .clickable { vm.previousDay() }
-                        .padding(8.dp)
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
                 )
-                Text(text = dayLabel, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    text = "▶",
-                    color = if (isToday) Color(0xFF4A4A55) else Color.White,
-                    fontSize = 20.sp,
-                    modifier = Modifier
-                        .clickable(enabled = !isToday) { vm.nextDay() }
-                        .padding(8.dp)
+                NeonIconButton(
+                    imageVector = Icons.Filled.ChevronRight,
+                    contentDescription = stringResource(R.string.weiter),
+                    enabled = !isToday,
+                    onClick = { vm.nextDay() }
                 )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StatCard(stringResource(R.string.strecke), "%.1f km".format(totalDistanceKm), Modifier.weight(1f))
-                StatCard(stringResource(R.string.unterwegs), formatDuration(timeMovingMs), Modifier.weight(1f))
-                StatCard(stringResource(R.string.stopps), dayStays.size.toString(), Modifier.weight(1f))
-            }
-
-            // Stats Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StatCard(
-                    label = stringResource(R.string.tiles),
-                    value = tileCount.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                StatCard(stringResource(R.string.erkundet), "%.8f%%".format(exploredPercent), Modifier.weight(1f))
-                StatCard(stringResource(R.string.heute_2), vm.todayCount.toString(), Modifier.weight(1f))
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StatCard(
-                    label = stringResource(R.string.tracker_status),
-                    value = trackerStatus,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            TrackerDebugInfo(
-                info = trackerInfo,
-                activity = currentActivity,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 12.dp)
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                StatCard(
-                    label = stringResource(R.string.explore_export),
-                    value = stringResource(R.string.explore_export_tag),
-                    modifier = Modifier.weight(1f),
+                Spacer(Modifier.width(8.dp))
+                NeonIconButton(
+                    imageVector = Icons.Filled.FileDownload,
+                    contentDescription = stringResource(R.string.explore_export_tag),
                     onClick = { vm.exportData(1) }
                 )
-                StatCard(
-                    label = stringResource(R.string.explore_export),
-                    value = stringResource(R.string.explore_export_7_tage),
-                    modifier = Modifier.weight(1f),
+                NeonIconButton(
+                    imageVector = Icons.Filled.Upload,
+                    contentDescription = stringResource(R.string.explore_export_7_tage),
                     onClick = { vm.exportData(7) }
                 )
+                NeonIconButton(
+                    imageVector = Icons.Filled.BugReport,
+                    contentDescription = stringResource(R.string.tracker_status),
+                    onClick = { showDebug = true }
+                )
             }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatChip(stringResource(R.string.strecke), "%.1f km".format(totalDistanceKm), Modifier.weight(1f))
+                StatChip(stringResource(R.string.unterwegs), formatDuration(timeMovingMs), Modifier.weight(1f))
+                StatChip(stringResource(R.string.stopps), dayStays.size.toString(), Modifier.weight(1f))
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatChip(stringResource(R.string.tiles), tileCount.toString(), Modifier.weight(1f))
+                StatChip(stringResource(R.string.erkundet), "%.8f%%".format(exploredPercent), Modifier.weight(1f))
+                StatChip(stringResource(R.string.heute_2), vm.todayCount.toString(), Modifier.weight(1f))
+            }
+
+            StatChip(
+                label = stringResource(R.string.tracker_status),
+                value = trackerStatus,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 6.dp)
+            )
 
             exportStatus?.let { status ->
                 Text(
@@ -295,7 +289,7 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(6.dp))
 
             Box(
                 modifier = Modifier
@@ -400,6 +394,24 @@ fun ExploreTabContent(setGesturesEnabled: (Boolean) -> Unit) {
                 icon = { Text("🗺️", fontSize = 24.sp) },
                 title = stringResource(R.string.tile_loschen),
                 text = stringResource(R.string.diesen_bereich_als_unbesucht_markieren)
+            )
+        }
+        if (showDebug) {
+            DialogTabslify(
+                onConfirm = { showDebug = false },
+                onDismiss = { showDebug = false },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Filled.BugReport,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                },
+                title = stringResource(R.string.tracker_status),
+                text = trackerDebugText(trackerInfo, currentActivity, trackerStatus),
+                confirmText = stringResource(R.string.verstanden),
+                oneButton = true
             )
         }
     }
@@ -533,95 +545,97 @@ private fun StayCard(stay: Stay, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun StatCard(
-    label: String,
-    value: String,
+private fun NeonIconButton(
+    imageVector: ImageVector,
+    contentDescription: String,
     modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null
+    enabled: Boolean = true,
+    onClick: () -> Unit
 ) {
-    val cardModifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier
     NeonBox(
-        modifier = cardModifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 2.dp),
-        borderWidth = 3.dp,
+        modifier = modifier
+            .size(36.dp)
+            .alpha(if (enabled) 1f else 0.3f),
+        cornerRadius = RoundedCornerShape(12.dp),
+        borderWidth = 2.dp,
         neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
-        backgroundAlpha = 0.25f,        // etwas transparenter, damit es edel aussieht
-
+        backgroundAlpha = 0.22f,
+        onClick = onClick
     ) {
-        Column(
-            modifier = Modifier
-                .padding(vertical = 8.dp, horizontal = 10.dp),   // Innenabstand angepasst
-            horizontalAlignment = Alignment.CenterHorizontally
+        Icon(
+            imageVector = imageVector,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun StatChip(label: String, value: String, modifier: Modifier = Modifier) {
+    NeonBox(
+        modifier = modifier.fillMaxWidth(),
+        cornerRadius = RoundedCornerShape(14.dp),
+        borderWidth = 2.dp,
+        neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
+        backgroundAlpha = 0.22f,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = label,
                 color = Color(0xFF9090A0),
-                fontSize = 11.sp
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
-            Spacer(Modifier.height(6.dp))
             Text(
                 text = value,
                 color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
 }
 
 @Composable
-private fun TrackerDebugInfo(info: ExploreTrackerInfo, activity: ExploreActivityInfo, modifier: Modifier = Modifier) {
-    NeonBox(
-        modifier = modifier,
-        borderWidth = 2.dp,
-        neonColors = listOf(Color(0xFF00FFAA), Color(0xFF00CCFF)),
-        backgroundAlpha = 0.15f,
-    ) {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp)
-        ) {
-            DebugLine(stringResource(R.string.zuhause), "%.6f, %.6f".format(info.homeLat, info.homeLng))
-            DebugLine(
-                stringResource(R.string.letzte_position),
-                if (info.lastLat != null && info.lastLng != null)
-                    "%.6f, %.6f".format(info.lastLat, info.lastLng)
-                else "—"
-            )
-            DebugLine(
-                stringResource(R.string.distanz_zuhause),
-                info.distanceToHomeMeters?.let { "%.0f m".format(it) } ?: "—"
-            )
-            DebugLine(stringResource(R.string.letztes_update), info.lastUpdate ?: "—")
-            DebugLine(
-                stringResource(R.string.geofence),
-                if (info.geofenceRegistered) stringResource(R.string.aktiv)
-                else info.geofenceError?.let { stringResource(R.string.fehler_msg, it) }
-                    ?: stringResource(R.string.nicht_registriert)
-            )
-            DebugLine(
-                stringResource(R.string.heim_wlan),
-                info.lastWifiHome?.let {
-                    if (it) stringResource(R.string.verbunden) else stringResource(R.string.nicht_verbunden)
-                } ?: "—"
-            )
-            DebugLine(stringResource(R.string.nachtmodus), if (info.isNight) stringResource(R.string.ja) else stringResource(R.string.nein))
-            DebugLine(stringResource(R.string.enabled), if (info.isEnabled) stringResource(R.string.ja) else stringResource(R.string.nein))
-            DebugLine(stringResource(R.string.aktivitaet), "${modeLabel(activity.mode)} (${activity.confidence}%)")
-        }
-    }
-}
-
-@Composable
-private fun DebugLine(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, color = Color(0xFF9090A0), fontSize = 11.sp)
-        Text(text = value, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-    }
-}
+private fun trackerDebugText(
+    info: ExploreTrackerInfo,
+    activity: ExploreActivityInfo,
+    status: String
+): String = listOf(
+    "${stringResource(R.string.tracker_status)}: $status",
+    "${stringResource(R.string.zuhause)}: ${"%.6f, %.6f".format(info.homeLat, info.homeLng)}",
+    "${stringResource(R.string.letzte_position)}: ${
+        if (info.lastLat != null && info.lastLng != null)
+            "%.6f, %.6f".format(info.lastLat, info.lastLng)
+        else "—"
+    }",
+    "${stringResource(R.string.distanz_zuhause)}: ${info.distanceToHomeMeters?.let { "%.0f m".format(it) } ?: "—"}",
+    "${stringResource(R.string.letztes_update)}: ${info.lastUpdate ?: "—"}",
+    "${stringResource(R.string.geofence)}: ${
+        if (info.geofenceRegistered) stringResource(R.string.aktiv)
+        else info.geofenceError?.let { stringResource(R.string.fehler_msg, it) }
+            ?: stringResource(R.string.nicht_registriert)
+    }",
+    "${stringResource(R.string.heim_wlan)}: ${
+        info.lastWifiHome?.let {
+            if (it) stringResource(R.string.verbunden) else stringResource(R.string.nicht_verbunden)
+        } ?: "—"
+    }",
+    "${stringResource(R.string.netz_typ)}: ${info.lastNetwork ?: "—"}",
+    "${stringResource(R.string.letzter_check)}: ${info.lastRecheckAt ?: "—"}",
+    "${stringResource(R.string.nachtmodus)}: ${if (info.isNight) stringResource(R.string.ja) else stringResource(R.string.nein)}",
+    "${stringResource(R.string.enabled)}: ${if (info.isEnabled) stringResource(R.string.ja) else stringResource(R.string.nein)}",
+    "${stringResource(R.string.aktivitaet)}: ${modeLabel(activity.mode)} (${activity.confidence}%)"
+).joinToString("\n")
 
 private class ExploreOverlay(
     private val tiles: List<ExploredTile>,
