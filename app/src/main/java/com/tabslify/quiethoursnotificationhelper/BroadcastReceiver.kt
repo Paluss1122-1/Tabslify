@@ -21,6 +21,7 @@ import com.tabslify.core.objects.tNotify
 import com.tabslify.services.MediaPlayerService
 import com.tabslify.services.MediaPlayerService.Companion.ACTION_PODCAST_PLAY_SPECIFIED
 import com.tabslify.services.MediaPlayerService.Companion.CHANNEL_ID
+import com.tabslify.services.MediaPlayerService.Companion.EXTRA_PODCAST_AUDIO_URL
 import com.tabslify.services.QuietHoursNotificationService
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_END
 import com.tabslify.services.QuietHoursNotificationService.Companion.ACTION_CHANGE_START
@@ -228,6 +229,7 @@ class FinishedPdDownload : BroadcastReceiver() {
                     val openBase = Intent(context, MediaPlayerService::class.java)
                     openBase.action = ACTION_PODCAST_PLAY_SPECIFIED
                     openBase.putExtra("safeTitle", safeTitle)
+                    if (audioUrl.isNotEmpty()) openBase.putExtra(EXTRA_PODCAST_AUDIO_URL, audioUrl)
                     openBase.setPackage(context.packageName)
                     val pendingIntent = PendingIntent.getForegroundService(
                         context, downloadId.toInt(), openBase,
