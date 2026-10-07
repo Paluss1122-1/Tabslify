@@ -120,6 +120,7 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import com.tabslify.R
+import com.tabslify.core.functions.SongHashtags
 import com.tabslify.core.ui.NeonBox
 import com.tabslify.quiethoursnotificationhelper.AiResponseEntry
 import com.tabslify.quiethoursnotificationhelper.aiResponseFlow
@@ -1334,7 +1335,35 @@ private fun MusicTab(
             }
 
             if (state.songs.isNotEmpty()) {
-                item { SectionHeader(stringResource(R.string.alle_songs_3, state.songs.size)) }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionHeader(stringResource(R.string.alle_songs_3, state.songs.size))
+                        val tagging = state.taggingState == SongHashtags.STATE_RUNNING
+                        val finished = state.taggingState == SongHashtags.STATE_DONE
+                        Button(
+                            onClick = {
+                                when {
+                                    tagging -> viewModel.cancelTagging()
+                                    finished -> viewModel.dismissTaggingResult()
+                                    else -> viewModel.tagMissingSongs()
+                                }
+                            },
+                            enabled = tagging || finished ||
+                                viewModel.countSongsWithoutHashtags(state) > 0
+                        ) {
+                            Text(
+                                when {
+                                    tagging -> "Abbrechen ${state.taggingDone}/${state.taggingTotal}"
+                                    finished -> "Fertig: ${state.taggingWritten} von ${state.taggingTotal}"
+                                    else -> "Tags ergänzen"
+                                }
+                            )
+                        }
+                    }
+                }
                 items(state.songs) { song ->
                     val isSelected = selectedSongs.contains(song.path)
                     Row(
@@ -1390,6 +1419,12 @@ private fun MusicTab(
                                 fontWeight = FontWeight.Medium, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            if (!song.hashtags.isNullOrBlank()) {
+                                Text(
+                                    song.hashtags, color = AccentViolet, fontSize = 11.sp,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -2026,6 +2061,12 @@ private fun SongRow(
             )
             if (sessionCount > 0) {
                 Text(stringResource(R.string.gehort, sessionCount), color = TextTertiary, fontSize = 11.sp)
+            }
+            if (!song.hashtags.isNullOrBlank()) {
+                Text(
+                    song.hashtags, color = AccentViolet, fontSize = 11.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -3223,6 +3264,11 @@ data class MediaUiState(
     val isLoading: Boolean = false,
     val searchQuery: String = "",
     val currentTab: MediaTab = MediaTab.HOME,
+    val taggingState: String = SongHashtags.STATE_IDLE,
+    val taggingDone: Int = 0,
+    val taggingTotal: Int = 0,
+    val taggingWritten: Int = 0,
+    val taggingFailed: Int = 0,
     val permissionGranted: Boolean? = null // null = noch nicht geprüft
 )
 
@@ -3237,6 +3283,7 @@ data class SearchResults(
 class MediaViewModel(app: Application) : AndroidViewModel(app) {
 
     private var refreshJob: Job? = null
+    private var taggingJob: Job? = null
     private val _uiState = MutableStateFlow(MediaUiState(isLoading = true))
     val uiState: StateFlow<MediaUiState> = _uiState.asStateFlow()
 
@@ -3305,6 +3352,71 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
         stopNowPlayingPoller()
     }
 
+    fun countSongsWithoutHashtags(state: MediaUiState): Int =
+        state.songs.count { it.hashtags.isNullOrBlank() }
+
+    fun tagMissingSongs() {
+        if (taggingJob?.isActive == true) return
+        val candidates = _uiState.value.songs.filter { it.hashtags.isNullOrBlank() }
+        if (candidates.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(
+            taggingState = SongHashtags.STATE_RUNNING,
+            taggingDone = 0,
+            taggingTotal = candidates.size,
+            taggingWritten = 0,
+            taggingFailed = 0
+        )
+
+        val context = getApplication<Application>()
+        taggingJob = viewModelScope.launch {
+            val refs = candidates.map { song ->
+                SongHashtags.SongRef(
+                    path = song.path,
+                    uri = song.uri,
+                    title = song.name,
+                    artist = song.artist,
+                    album = song.album
+                )
+            }
+            val results = SongHashtags.tagSongs(context, refs) { progress ->
+                _uiState.value = _uiState.value.copy(
+                    taggingDone = progress.done,
+                    taggingTotal = progress.total
+                )
+            }
+            _uiState.value = _uiState.value.copy(
+                taggingState = SongHashtags.STATE_DONE,
+                taggingWritten = results.count { it.written },
+                taggingFailed = results.count { !it.skipped && !it.written }
+            )
+            refresh()
+        }
+    }
+
+    fun cancelTagging() {
+        taggingJob?.cancel()
+        taggingJob = null
+        _uiState.value = _uiState.value.copy(
+            taggingState = SongHashtags.STATE_IDLE,
+            taggingDone = 0,
+            taggingTotal = 0,
+            taggingWritten = 0,
+            taggingFailed = 0
+        )
+    }
+
+    fun dismissTaggingResult() {
+        if (_uiState.value.taggingState != SongHashtags.STATE_DONE) return
+        _uiState.value = _uiState.value.copy(
+            taggingState = SongHashtags.STATE_IDLE,
+            taggingDone = 0,
+            taggingTotal = 0,
+            taggingWritten = 0,
+            taggingFailed = 0
+        )
+    }
+
     fun refresh() {
         if (!hasAudioPermission()) {
             _uiState.value = _uiState.value.copy(permissionGranted = false, isLoading = false)
@@ -3354,12 +3466,15 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun loadSongsFromMediaStore(): List<MediaPlayerService.Song> {
         val songs = mutableListOf<MediaPlayerService.Song>()
-        val cr: ContentResolver = getApplication<Application>().contentResolver
+        val context = getApplication<Application>()
+        val cr: ContentResolver = context.contentResolver
         val proj = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.DATA,
-            MediaStore.Audio.Media.TITLE
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM
         )
         cr.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, proj, null, null,
@@ -3369,6 +3484,15 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
             val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
             val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
             val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistCol = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST)
+            val albumCol = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM)
+
+            fun columnText(index: Int): String {
+                if (index < 0) return ""
+                val value = cursor.getString(index) ?: return ""
+                return if (value == "<unknown>") "" else value
+            }
+
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 val name = cursor.getString(nameCol) ?: continue
@@ -3389,7 +3513,16 @@ class MediaViewModel(app: Application) : AndroidViewModel(app) {
                         if (!title.isNullOrBlank() && title != "<unknown>") title else name.substringBeforeLast(
                             '.'
                         )
-                    songs.add(MediaPlayerService.Song(contentUri, displayName, data))
+                    songs.add(
+                        MediaPlayerService.Song(
+                            uri = contentUri,
+                            name = displayName,
+                            path = data,
+                            hashtags = SongHashtags.readHashtags(context, contentUri, data),
+                            artist = columnText(artistCol),
+                            album = columnText(albumCol)
+                        )
+                    )
                 }
             }
         }
