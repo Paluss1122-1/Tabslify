@@ -313,6 +313,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
     val lifecycleOwner = LocalLifecycleOwner.current
     var online by remember { mutableStateOf(isOnline(context)) }
     var authStuck by remember { mutableStateOf(false) }
+    var hadSession by remember { mutableStateOf(sessionStatus is SessionStatus.Authenticated) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -322,6 +323,10 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(sessionStatus) {
+        if (sessionStatus is SessionStatus.Authenticated) hadSession = true
     }
 
     LaunchedEffect(sessionStatus, online) {
@@ -348,7 +353,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
 
             SessionStatus.Initializing,
             is SessionStatus.RefreshFailure -> {
-                if (client.auth.currentSessionOrNull() == null) {
+                if (!hadSession && client.auth.currentSessionOrNull() == null) {
                     if (!online || authStuck) {
                         SupabaseLoginScreen { }
                         return
@@ -1927,6 +1932,7 @@ fun SettingsFrame(
     val apiKeyDefs = remember {
         listOf(
             "NVIDIA API-Key" to "api_key_nvidia",
+            "OpenRouter API-Key" to "api_key_openrouter",
             "TMDB API-Key" to "api_key_tmdb",
             "WeatherAPI-Key" to "api_key_weatherapi",
             "RapidAPI-Key (Spotify)" to "api_key_rapidapi",
@@ -2803,6 +2809,13 @@ fun SettingsFrame(
                                                 false; save()
                                             }
                                         )
+                                        DropdownMenuItem(
+                                            text = { Text("OpenRouter", color = Color.White) },
+                                            onClick = {
+                                                aiPrefGlobal = "openrouter"; showGlobalDropdown =
+                                                false; save()
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -2880,6 +2893,7 @@ fun SettingsFrame(
                                                         "default" -> stringResource(R.string.standard)
                                                         "gemini" -> "Gemini"
                                                         "nvidia" -> "NVIDIA"
+                                                        "openrouter" -> "OpenRouter"
                                                         else -> stringResource(R.string.standard)
                                                     },
                                                     color = Color.White.copy(alpha = 0.8f),
@@ -2936,6 +2950,18 @@ fun SettingsFrame(
                                                         },
                                                         onClick = {
                                                             setter("nvidia"); showServiceDropdown =
+                                                            false; save()
+                                                        }
+                                                    )
+                                                    DropdownMenuItem(
+                                                        text = {
+                                                            Text(
+                                                                "OpenRouter",
+                                                                color = Color.White
+                                                            )
+                                                        },
+                                                        onClick = {
+                                                            setter("openrouter"); showServiceDropdown =
                                                             false; save()
                                                         }
                                                     )
