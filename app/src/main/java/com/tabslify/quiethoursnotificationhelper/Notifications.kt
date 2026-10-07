@@ -14,6 +14,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.prvt
 import com.tabslify.inactive.ChatService
@@ -288,15 +289,27 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    val contentBase = Intent(context, QuietHoursNotificationService::class.java)
-    contentBase.action = ACTION_CONTENT_INTENT
-    contentBase.setPackage(context.packageName)
-    val contentPendingIntent = PendingIntent.getService(
-        context,
-        1002,
-        contentBase,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
+    val contentPendingIntent = if (isQuietHours) {
+        val contentBase = Intent(context, QuietHoursNotificationService::class.java)
+        contentBase.action = ACTION_CONTENT_INTENT
+        contentBase.setPackage(context.packageName)
+        PendingIntent.getService(
+            context,
+            1002,
+            contentBase,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    } else {
+        val launchBase = Intent(context, MainActivity::class.java)
+        launchBase.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        launchBase.setPackage(context.packageName)
+        PendingIntent.getActivity(
+            context,
+            1002,
+            launchBase,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
 
     val commandInput = RemoteInput.Builder("key_command_input")
         .setLabel("Befehl eingeben...")
