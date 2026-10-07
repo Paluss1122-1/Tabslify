@@ -9,6 +9,7 @@ import android.service.autofill.AutofillService
 import android.service.autofill.Dataset
 import android.service.autofill.Field
 import android.service.autofill.FillCallback
+import android.service.autofill.FillEventHistory
 import android.service.autofill.FillRequest
 import android.service.autofill.FillResponse
 import android.service.autofill.InlinePresentation
@@ -28,11 +29,15 @@ import androidx.core.net.toUri
 import com.tabslify.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import androidx.core.content.edit
 
 class TabslifyAutofillService : AutofillService() {
 
     companion object {
         private const val TAG = "Tabslify_AUTOFILL"
+        private const val LAST_USED_PREFS = "autofill_last_used"
+        private const val PW_KEY_PREFIX = "pw_"
+        private const val OTP_KEY_PREFIX = "otp_"
     }
 
     override fun onFillRequest(
@@ -40,6 +45,10 @@ class TabslifyAutofillService : AutofillService() {
         cancellationSignal: CancellationSignal,
         callback: FillCallback
     ) {
+        try {
+            recordSelectedDatasets()
+        } catch (_: Exception) {
+        }
         val structure = request.fillContexts.last().structure
         val loginFields = findLoginFields(structure)
 
@@ -59,6 +68,7 @@ class TabslifyAutofillService : AutofillService() {
         val responseBuilder = FillResponse.Builder()
         var hasDataset = false
         var presentationIndex = 0
+        val lastUsedPrefs = getSharedPreferences(LAST_USED_PREFS, MODE_PRIVATE)
 
         if (loginFields.usernameId != null || loginFields.passwordId != null) {
             val db = PasswordDatabase.getDatabase(applicationContext)
@@ -74,8 +84,12 @@ class TabslifyAutofillService : AutofillService() {
                     }
                 }
             }
-            entries.take(5).forEach { entry ->
-                val ds = Dataset.Builder()
+            val sortedEntries = entries.sortedWith(
+                compareByDescending<PasswordEntry> { lastUsedPrefs.getLong(PW_KEY_PREFIX + it.id, 0L) }
+                    .thenBy { it.name.lowercase() }
+            )
+            sortedEntries.take(5).forEach { entry ->
+                val ds = Dataset.Builder().setId(PW_KEY_PREFIX + entry.id)
 
                 loginFields.usernameId?.let { id ->
                     val field = Field.Builder()
@@ -116,7 +130,11 @@ class TabslifyAutofillService : AutofillService() {
                     }
                 }
             }
-            matched.take(3).forEach { entry ->
+            val sortedMatched = matched.sortedWith(
+                compareByDescending<TwoFAEntry> { lastUsedPrefs.getLong(OTP_KEY_PREFIX + it.id, 0L) }
+                    .thenBy { it.name.lowercase() }
+            )
+            sortedMatched.take(3).forEach { entry ->
                 val code = TotpGenerator.generateTOTP(entry.secret)
                 if (code == "ERROR" || code.isBlank()) return@forEach
                 val field = Field.Builder()
@@ -133,7 +151,7 @@ class TabslifyAutofillService : AutofillService() {
                         )
                     )
                     .build()
-                val ds = Dataset.Builder().setField(otpFieldId, field)
+                val ds = Dataset.Builder().setId(OTP_KEY_PREFIX + entry.id).setField(otpFieldId, field)
                 responseBuilder.addDataset(ds.build())
                 hasDataset = true
                 presentationIndex++
@@ -173,7 +191,7 @@ class TabslifyAutofillService : AutofillService() {
         val label = domain.ifEmpty { tokens.firstOrNull() ?: targetPackageName }
         val urlValue = domain.ifEmpty { targetPackageName }
 
-        runBlocking(Dispatchers.IO) {
+        val usedId = runBlocking(Dispatchers.IO) {
             val dao = PasswordDatabase.getDatabase(applicationContext).passwordDao()
             val existing = (
                     if (domain.isNotEmpty()) dao.findByDomain(domain)
@@ -181,6 +199,7 @@ class TabslifyAutofillService : AutofillService() {
                     ).firstOrNull { it.username.equals(username, ignoreCase = true) }
             if (existing != null) {
                 dao.update(existing.copy(password = password, updatedAt = System.currentTimeMillis()))
+                existing.id
             } else {
                 dao.insert(
                     PasswordEntry(
@@ -190,10 +209,38 @@ class TabslifyAutofillService : AutofillService() {
                         password = password,
                         totpSecret = null
                     )
-                )
+                ).toInt()
             }
         }
+        try {
+            markDatasetUsed(PW_KEY_PREFIX + usedId)
+        } catch (_: Exception) {
+        }
         callback.onSuccess()
+    }
+
+    private fun markDatasetUsed(datasetId: String) {
+        getSharedPreferences(LAST_USED_PREFS, MODE_PRIVATE)
+            .edit {
+                putLong(datasetId, System.currentTimeMillis())
+            }
+    }
+
+    private fun recordSelectedDatasets() {
+        @Suppress("DEPRECATION")
+        val history = fillEventHistory ?: return
+        val editor = getSharedPreferences(LAST_USED_PREFS, MODE_PRIVATE).edit()
+        var changed = false
+        for (event in history.events.orEmpty()) {
+            if (event.type == FillEventHistory.Event.TYPE_DATASET_SELECTED) {
+                val datasetId = event.datasetId ?: continue
+                if (datasetId.startsWith(PW_KEY_PREFIX) || datasetId.startsWith(OTP_KEY_PREFIX)) {
+                    editor.putLong(datasetId, System.currentTimeMillis())
+                    changed = true
+                }
+            }
+        }
+        if (changed) editor.apply()
     }
 
     private fun collectValues(
@@ -229,6 +276,15 @@ class TabslifyAutofillService : AutofillService() {
             val inputType = node.inputType
             val hint = node.hint?.lowercase() ?: ""
             val idEntry = node.idEntry?.lowercase() ?: ""
+            val inputClass = inputType and InputType.TYPE_MASK_CLASS
+            val inputVariation = inputType and InputType.TYPE_MASK_VARIATION
+            val isTextField = inputClass == InputType.TYPE_CLASS_TEXT
+            val htmlAttributes =
+                node.htmlInfo?.attributes?.associate { it.first.lowercase() to (it.second?.lowercase() ?: "") }
+                    ?: emptyMap()
+            val htmlType = htmlAttributes["type"] ?: ""
+            val htmlAutocomplete = htmlAttributes["autocomplete"] ?: ""
+            val htmlName = htmlAttributes["name"] ?: ""
 
             val isOtp = (
                     hints?.any { h ->
@@ -243,6 +299,7 @@ class TabslifyAutofillService : AutofillService() {
                             || idEntry.contains("otp") || idEntry.contains("totp") || idEntry.contains(
                         "token"
                     ) || idEntry.contains("mfa") || idEntry.contains("tfa") || idEntry.contains("pin")
+                            || htmlAutocomplete.contains("one-time-code") || htmlAutocomplete.contains("otp")
                     )
 
             val isPassword = !isOtp && (
@@ -252,13 +309,16 @@ class TabslifyAutofillService : AutofillService() {
                             true
                         ) || h == "current-password" || h == "new-password"
                     } == true
-                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_PASSWORD
-                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
-                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                            || (isTextField && inputVariation == InputType.TYPE_TEXT_VARIATION_PASSWORD)
+                            || (isTextField && inputVariation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)
+                            || (isTextField && inputVariation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
                             || hint.contains("passwort") || hint.contains("password")
                             || idEntry.contains("password") || idEntry.contains("passwd") || idEntry.contains(
                         "pwd"
                     )
+                            || htmlType == "password"
+                            || htmlAutocomplete == "current-password" || htmlAutocomplete == "new-password"
+                            || htmlName.contains("pass") || htmlName.contains("pwd")
                     )
 
             val isUsername = !isOtp && !isPassword && (
@@ -273,11 +333,16 @@ class TabslifyAutofillService : AutofillService() {
                             || idEntry.contains("user") || idEntry.contains("email") || idEntry.contains(
                         "login"
                     )
-                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-                            || (inputType and InputType.TYPE_MASK_VARIATION) == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
+                            || (isTextField && inputVariation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
+                            || (isTextField && inputVariation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS)
+                            || htmlType == "email"
+                            || htmlAutocomplete == "username" || htmlAutocomplete == "email"
+                            || htmlName.contains("user") || htmlName.contains("email") || htmlName.contains(
+                        "login"
+                    )
                     )
 
-            if (node.autofillId != null) {
+            if (node.autofillId != null && node.autofillType != android.view.View.AUTOFILL_TYPE_NONE) {
                 if (isOtp && otpId == null) otpId = node.autofillId
                 if (isPassword && passwordId == null) passwordId = node.autofillId
                 if (isUsername && usernameId == null) usernameId = node.autofillId
@@ -359,7 +424,7 @@ class TabslifyAutofillService : AutofillService() {
         if (specs.isEmpty()) return null
         val spec = if (index < specs.size) specs[index] else specs.last()
         return try {
-            createInlineChip(spec, entry)
+            createInlineChip(spec, entry, 0xA710 + index)
         } catch (e: Exception) {
             Log.e(TAG, "createInlinePresentation failed: ${e.message}")
             null
@@ -369,12 +434,14 @@ class TabslifyAutofillService : AutofillService() {
     @SuppressLint("RestrictedApi")
     private fun createInlineChip(
         spec: InlinePresentationSpec,
-        entry: PasswordEntry
+        entry: PasswordEntry,
+        requestCode: Int
     ): InlinePresentation? {
         return try {
+            val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return null
             val pendingIntent = PendingIntent.getActivity(
-                this, 0,
-                packageManager.getLaunchIntentForPackage(packageName)!!,
+                this, requestCode,
+                launchIntent,
                 PendingIntent.FLAG_IMMUTABLE
             )
             val content = InlineSuggestionUi.newContentBuilder(pendingIntent)
