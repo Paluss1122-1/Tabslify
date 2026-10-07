@@ -19,34 +19,85 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 enum class AiProvider {
-    GEMINI, NVIDIA
+    GEMINI, NVIDIA, OPENROUTER
 }
 
-private fun buildSystemPrompt(target: String = ""): String {
-    val aiTab = if (target == "AITab") " in einem Tab namens AITab" else ""
-    val aiTabInfo =
-        if (target == "AITab") " Der Nutzer kann zwischen verschiedenen NVIDIA-Modellen und verschiedenen Gemini-Modellen auswählen – und hat sich für DICH entschieden." else ""
-    val notif = if (target == "notif") " von einem Reply System" else ""
-    return buildString {
-        append(
-            """Du wirst per API aus einer Multifunktions-Android-App (names Tabslify)${aiTab}${notif} aufgerufen.${aiTabInfo} Deine Aufgabe ist es, die Frage des Nutzers zu beantworten.
-                    Wichtige Hinweise:
-                        * Antworte kurz, klar und auf Deutsch.
-                        * Sei ein hilfsbereiter Chat-Assistent."""
-        )
-        if (target == "AITab") {
-            append(
-                """* Nutze Markdown für Formatierungen (Überschriften, Listen, Fettschrift etc.).
-                        * Nutze die folgenden Callouts für einprägsame Informationen (immer in einem eigenen Blockquote):
-                          - [!TIP] oder [!HINT] oder [!IMPORTANT] für Tipps und wichtige Hinweise
-                          - [!WARNING] oder [!CAUTION] oder [!ATTENTION] für einprägsame Informationen
-                          - [!INFO] für allgemeine Informationen
-                          - [!NOTE] für Notizen
-                          - [!SUCCESS] oder [!CHECK] oder [!DONE] für Erfolgsmeldungen
-                          - [!DANGER] oder [!ERROR] für Fehler""${'"'}"""
-            )
-        }
-    }
+const val OPENROUTER_DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+
+enum class AiTarget {
+    AITab,
+    NotificationReply,
+    VocabHint,
+    MaterialOcr,
+    MaterialSummary,
+    HeiseSummary,
+    HeiseQa,
+    MusicSummary,
+    Vision,
+    SongHashtags,
+    ChargingPrediction
+}
+
+fun aiSystemPrompt(target: AiTarget): String = when (target) {
+    AiTarget.AITab -> """
+        Du wirst per API aus einer Multifunktions-Android-App (names Tabslify) in einem Tab namens AITab aufgerufen. Der Nutzer kann zwischen verschiedenen NVIDIA-Modellen und verschiedenen Gemini-Modellen auswählen – und hat sich für DICH entschieden. Deine Aufgabe ist es, die Frage des Nutzers zu beantworten.
+        Wichtige Hinweise:
+            * Antworte kurz, klar und auf Deutsch.
+            * Sei ein hilfsbereiter Chat-Assistent.
+            * Nutze Markdown für Formatierungen (Überschriften, Listen, Fettschrift etc.).
+            * Nutze die folgenden Callouts für einprägsame Informationen (immer in einem eigenen Blockquote):
+              - [!TIP] oder [!HINT] oder [!IMPORTANT] für Tipps und wichtige Hinweise
+              - [!WARNING] oder [!CAUTION] oder [!ATTENTION] für einprägsame Informationen
+              - [!INFO] für allgemeine Informationen
+              - [!NOTE] für Notizen
+              - [!SUCCESS] oder [!CHECK] oder [!DONE] für Erfolgsmeldungen
+              - [!DANGER] oder [!ERROR] für Fehler
+    """.trimIndent()
+
+    AiTarget.NotificationReply -> """
+        Du wirst per API aus einer Multifunktions-Android-App (names Tabslify) von einem Reply System aufgerufen. Deine Aufgabe ist es, die Frage des Nutzers zu beantworten.
+        Wichtige Hinweise:
+            * Antworte kurz, klar und auf Deutsch.
+            * Sei ein hilfsbereiter Chat-Assistent.
+    """.trimIndent()
+
+    AiTarget.VocabHint -> """
+        Du bist ein Vokabel-Nachschlagewerk in einer Android-App. Antworte auf Deutsch, sehr knapp und ohne Anrede. Gib einen kurzen Beispielsatz mit der Vokabel und eine grammatische Kurzangabe zu Genus und Form, falls erkennbar. Verwende kein Markdown.
+    """.trimIndent()
+
+    AiTarget.MaterialOcr -> """
+        Du bist ein hochpräzises System zur strukturierten Inhaltsextraktion für nachfolgende LLM-Verarbeitung. Analysiere das bereitgestellte Bild und generiere eine semantisch perfekt aufbereitete Textrekonstruktion. Antworte auf Deutsch, ausschließlich als Markdown, ohne Einleitung oder Vorrede.
+    """.trimIndent()
+
+    AiTarget.MaterialSummary -> """
+        Du bist ein erfahrener, empathischer Pädagoge und Experte für Didaktik. Deine Aufgabe ist es, den extrahierten Inhalt eines Lernmaterials so aufzubereiten, dass Schüler oder Studierende das Thema intuitiv, tiefgründig und nachhaltig verstehen. Tonfall: motivierend, klar, verständlich, auf Augenhöhe, fehlerfrei auf Deutsch. Vermeide verschachtelte Sätze und kognitive Überlastung. Nutze Markdown.
+        Für die kritischen Punkte (Abschnitt 4) gilt Styling-Pflicht: Setze jeden Punkt als Markdown-Callout. Erlaubte Typen sind ausschließlich [!warning], [!danger], [!info], [!tip], [!note] und [!success]. Syntax: `> [!warning] Text`; jede Folgezeile eines Callouts beginnt ebenfalls mit `> `. Andere Typen nicht verwenden, Callouts nicht ineinander verschachteln, nicht in Aufzählungen einrücken und nicht als `> [!warning]` ohne anschließenden Text stehen lassen.
+    """.trimIndent()
+
+    AiTarget.HeiseSummary -> """
+        Du fasst deutschsprachige Tech-Artikel zusammen. Erstelle eine sehr knappe, gut lesbare deutsche Zusammenfassung mit maximal 3 bis 4 kurzen Bulletpoints (je maximal ein Satz) mit den wichtigsten Fakten, Zahlen, Produkt-/Versionsnamen und Auswirkungen. Bleib strikt beim Inhalt des Textes, erfinde nichts. Keine Füllwörter oder Wiederholungen, insgesamt so kurz wie möglich. Schließe mit einer kurzen Einschätzung in maximal einem Satz ab. Beginne direkt, ohne Einleitung.
+        Markiere zusätzlich 4 bis 8 zentrale Fachbegriffe, Produktnamen, Firmen, Personen oder Abkürzungen inline als [[Begriff::Frage]] (Begriff max. 3 Wörter, Frage eine knappe konkrete Rückfrage; kein "[[" "::" "]]" innerhalb von Begriff oder Frage; nur inline in den Bulletpoints, nicht im Einschätzungssatz; kein anderes Markdown-Link-Format).
+    """.trimIndent()
+
+    AiTarget.HeiseQa -> """
+        Du beantwortest Fragen eines Nutzers zu einem Artikel kurz, präzise und auf Deutsch (2-5 Sätze, bei Bedarf mit Stichpunkten). Nutze primär den Artikeltext als Quelle. Ergänze offensichtliches Allgemeinwissen nur wenn nötig und sag klar, wenn etwas nicht im Artikel steht. Beginne direkt, ohne Einleitung.
+    """.trimIndent()
+
+    AiTarget.MusicSummary -> """
+        Du bist ein cooler Musik-Assistent. Antworte auf Deutsch, total locker und umgangssprachlich, wie ein Kumpel. Mach 3-5 super knappe Sätze. Verwende Ausdrücke wie 'krass', 'geil', 'richtig lange', 'am Stück'. Red von 'heute' wenn es passt.
+    """.trimIndent()
+
+    AiTarget.Vision -> """
+        Du extrahierst Vokabeln aus einem Bild. Es gibt ZWEI Spalten: Latein links, Deutsch rechts. Jede Zeile ist ein Vokabelpaar. Ordne jedes lateinische Wort dem deutschen Wort auf derselben vertikalen Position zu. Ignoriere Seitenzahlen (z. B. "116") und wiederholte oder doppelte Blöcke am unteren Rand. Antworte ausschließlich mit einem JSON-Array der Form [{"latein":"...","deutsch":"..."}], ohne Markdown, ohne Erklärung.
+    """.trimIndent()
+
+    AiTarget.SongHashtags -> """
+        Du bist ein Musik-Metadaten-Dienst. Du antwortest ausschließlich auf Deutsch und gibst ausschließlich Hashtags zurück, ohne Fließtext, ohne Nummerierung und ohne Anführungszeichen.
+    """.trimIndent()
+
+    AiTarget.ChargingPrediction -> """
+        You are a battery charge-time prediction engine. Output ONLY a single integer: estimated minutes to reach 85%. No explanation, no units, no text.
+    """.trimIndent()
 }
 
 private suspend fun sendGeminiRequest(
@@ -55,17 +106,12 @@ private suspend fun sendGeminiRequest(
     pic: String? = null,
     audioUri: android.net.Uri? = null,
     ctx: Context? = null,
-    anlytic: Boolean = false,
     model: String = DEF_GEMINI,
     onToken: ((String) -> Unit)? = null,
-    target: String = "AITab"
+    target: AiTarget = AiTarget.AITab
 ): String? {
     fun buildGeminiPrompt(history: List<ChatMessage>, userMessage: String) = buildString {
-        if (anlytic) {
-            append("Du bist ein cooler Musik-Assistent. Antworte auf Deutsch, total locker und umgangssprachlich, wie ein Kumpel. Mach 3-5 super knappe Sätze. Verwende Ausdrücke wie 'krass', 'geil', 'richtig lange', 'am Stück'. Red von 'heute' wenn es passt.\n\n")
-        } else {
-            append(buildSystemPrompt(target))
-        }
+        append(aiSystemPrompt(target))
         history.forEach { msg ->
             append(if (msg.own) "User: " else "Assistant: ")
             append(msg.text)
@@ -138,17 +184,15 @@ private suspend fun sendGeminiRequest(
     }
 }
 
-private fun buildNvidiaAITabMessages(
+private fun buildChatCompletionsMessages(
     history: List<ChatMessage>,
     userMessage: String,
-    pic: String?
+    pic: String?,
+    systemPrompt: String
 ): JSONArray = JSONArray().apply {
     put(JSONObject().apply {
         put("role", "system")
-        put(
-            "content",
-            "Du bist ein hilfreicher Chat-Assistent. Antworte kurz, klar und auf Deutsch und verwende keine Markdown Syntax."
-        )
+        put("content", systemPrompt)
     })
 
     history.forEach { msg ->
@@ -179,15 +223,19 @@ private fun buildNvidiaAITabMessages(
     })
 }
 
-private suspend fun sendNvidiaChatMessageAITab(
+private suspend fun sendChatCompletionsMessage(
     ctx: Context,
     history: List<ChatMessage>,
     userMessage: String,
     model: String,
+    action: String,
+    apiKeyName: String,
+    logTag: String,
+    systemPrompt: String,
     pic: String? = null,
     onToken: ((String) -> Unit)? = null
 ): String {
-    val messages = buildNvidiaAITabMessages(history, userMessage, pic)
+    val messages = buildChatCompletionsMessages(history, userMessage, pic, systemPrompt)
 
     val payload = JSONObject().apply {
         put("model", model)
@@ -198,9 +246,9 @@ private suspend fun sendNvidiaChatMessageAITab(
     }
 
     val requestBody = JSONObject().apply {
-        put("action", "nvidia")
+        put("action", action)
         put("payload", payload)
-        put("apiKey", Config.userApiKey(ctx, "nvidia"))
+        put("apiKey", Config.userApiKey(ctx, apiKeyName))
     }.toString()
 
     return withContext(Dispatchers.IO) {
@@ -213,8 +261,8 @@ private suspend fun sendNvidiaChatMessageAITab(
                 val errorText =
                     connection.errorStream?.bufferedReader()?.readText() ?: "No error body"
                 Log.e(
-                    "AI",
-                    "Nvidia proxy failed with code ${connection.responseCode}: $errorText"
+                    logTag,
+                    "$logTag proxy failed with code ${connection.responseCode}: $errorText"
                 )
                 
                 try {
@@ -285,27 +333,77 @@ fun getPreferredAiProvider(context: Context, serviceKey: String): String {
     return if (specific == "default") global else specific
 }
 
+suspend fun sendOpenrouterMessage(
+    context: Context,
+    userMessage: String,
+    history: List<ChatMessage> = emptyList(),
+    systemPrompt: String,
+    pic: String? = null,
+    model: String? = null,
+    onToken: ((String) -> Unit)? = null
+): String = sendChatCompletionsMessage(
+    ctx = context,
+    history = history,
+    userMessage = userMessage,
+    model = model ?: OPENROUTER_DEFAULT_MODEL,
+    action = "openrouter",
+    apiKeyName = "openrouter",
+    logTag = "OpenRouter",
+    systemPrompt = systemPrompt,
+    pic = pic,
+    onToken = onToken
+)
+
 suspend fun sendAiRequest(
     context: Context,
     userMessage: String,
     history: List<ChatMessage> = emptyList(),
     pic: String? = null,
     audioUri: android.net.Uri? = null,
-    target: String = "AITab",
-    anlytic: Boolean = false,
+    target: AiTarget = AiTarget.AITab,
     provider: AiProvider? = null,
     serviceKey: String = "default",
     model: String? = null,
     onToken: ((String) -> Unit)? = null
 ): String? {
-    val resolvedProvider = provider ?: if (getPreferredAiProvider(context, serviceKey) == "nvidia") AiProvider.NVIDIA else AiProvider.GEMINI
-    
-    return if (resolvedProvider == AiProvider.NVIDIA) {
-        val resolvedModel = model ?: if (pic != null) "meta/llama-3.2-90b-vision-instruct" else "openai/gpt-oss-20b"
-        sendNvidiaChatMessageAITab(context, history, userMessage, resolvedModel, pic, onToken)
-    } else {
-        val resolvedModel = model ?: DEF_GEMINI
-        sendGeminiRequest(history, userMessage, pic, audioUri, context, anlytic, resolvedModel, onToken, target)
+    val resolvedProvider = provider ?: when (getPreferredAiProvider(context, serviceKey)) {
+        "nvidia" -> AiProvider.NVIDIA
+        "openrouter" -> AiProvider.OPENROUTER
+        else -> AiProvider.GEMINI
+    }
+    val systemPrompt = aiSystemPrompt(target)
+
+    return when (resolvedProvider) {
+        AiProvider.NVIDIA -> {
+            val resolvedModel = model ?: if (pic != null) "meta/llama-3.2-90b-vision-instruct" else "openai/gpt-oss-20b"
+            sendChatCompletionsMessage(
+                ctx = context,
+                history = history,
+                userMessage = userMessage,
+                model = resolvedModel,
+                action = "nvidia",
+                apiKeyName = "nvidia",
+                logTag = "Nvidia",
+                systemPrompt = systemPrompt,
+                pic = pic,
+                onToken = onToken
+            )
+        }
+
+        AiProvider.OPENROUTER -> sendOpenrouterMessage(
+            context = context,
+            userMessage = userMessage,
+            history = history,
+            systemPrompt = systemPrompt,
+            pic = pic,
+            model = model,
+            onToken = onToken
+        )
+
+        AiProvider.GEMINI -> {
+            val resolvedModel = model ?: DEF_GEMINI
+            sendGeminiRequest(history, userMessage, pic, audioUri, context, resolvedModel, onToken, target)
+        }
     }
 }
 
