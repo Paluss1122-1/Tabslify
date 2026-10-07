@@ -109,6 +109,7 @@ import com.tabslify.core.ui.TextTertiary
 import com.tabslify.core.ui.calloutAwareMarkdownComponents
 import com.tabslify.core.ui.normalizeCallouts
 import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.AiTarget
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
@@ -393,7 +394,7 @@ fun MaterialienScreen(
                 context = context,
                 history = emptyList(),
                 userMessage = """
-                    Du bist ein hochpräzises System zur strukturierten Inhaltsextraktion für nachfolgende LLM-Verarbeitung. Analysiere das bereitgestellte Bild und generiere eine semantisch perfekt aufbereitete Textrekonstruktion. Halte dich strikt an diese Struktur:
+                    Halte dich strikt an diese Struktur:
 
                     # [TITEL/ÜBERSCHRIFT DES MATERIALS]
 
@@ -414,6 +415,7 @@ fun MaterialienScreen(
                     Ziel: Ein kompromisslos strukturierter, semantisch reicher Text, den ein anderes KI-Modell ohne das Originalbild fehlerfrei interpretieren und weiterverarbeiten kann.
                 """.trimIndent(),
                 pic = base64,
+                target = AiTarget.MaterialOcr,
                 model = MAX_GEMINI,
                 provider = AiProvider.GEMINI
             ) ?: throw Exception(ocrFehlgeschlagen)
@@ -422,8 +424,6 @@ fun MaterialienScreen(
                 context = context,
                 history = emptyList(),
                 userMessage = """
-                    Du bist ein erfahrener, empathischer Pädagoge und Experte für Didaktik. Deine Aufgabe ist es, den folgenden extrahierten Inhalt eines Lernmaterials so aufzubereiten, dass Schüler oder Studierende das Thema intuitiv, tiefgründig und nachhaltig verstehen. 
-
                     HIER IST DAS ROHMATERIAL:
                     $rawText
 
@@ -443,20 +443,12 @@ fun MaterialienScreen(
 
                     4. **Spickzettel & Aha-Momente (Kritische Punkte)**
                        - Fasse die 3 bis 5 absolut kritischen Erkenntnisse prägnant zusammen.
-                       - **STYLING-PFLICHT:** Setze jeden dieser Punkte als Markdown-Callout, damit er optisch sofort aus dem Fließtext hervorsticht. Erlaubte Typen sind ausschließlich:
-                         * `[!warning]` — typische Klausur-Stolperfallen, verbreitete Fehlvorstellungen
-                         * `[!danger]` — Fehler, an denen eine Lösung direkt kippt
-                         * `[!info]` — Definitionen, Einordnung, Kontext
-                         * `[!tip]` — Lerntipp, Eselsbrücke, Merktrick
-                         * `[!note]` — zusätzliches Hintergrundwissen
-                         * `[!success]` — sicheres Merkwissen, Checklistenpunkt
-                       - Syntax: `> [!warning] Text`. Jede Folgezeile eines Callouts wird ebenfalls mit `> ` beginnen. Andere Typen nicht verwenden, Callouts nicht ineinander verschachteln, nicht in Aufzählungen einrücken und nicht als `> [!warning]` ohne anschließenden Text stehen lassen.
+                       - Setze jeden dieser Punkte als Markdown-Callout gemäß der Formatvorgabe.
 
                     5. **Selbstcheck (Aktivierung des Gelernten)**
                        - Beende den Text mit 2 kurzen, reflexiven Fragen (ohne direkt die Antwort zu verraten), mit denen die Lernenden selbst prüfen können, ob sie den Kern der Sache verstanden haben.
-
-                    Tonfall: Motivierend, klar, verständlich, auf Augenhöhe, fehlerfrei auf Deutsch. Vermeide verschachtelte Sätze und kognitive Überlastung.
                 """.trimIndent(),
+                target = AiTarget.MaterialSummary,
                 provider = AiProvider.GEMINI
             ) ?: throw Exception(summaryFehlgeschlagen)
 
@@ -483,16 +475,22 @@ fun MaterialienScreen(
     if (showAiSummaryToRefresh) {
         AlertDialogTabslify(
             onConfirm = {
-                scope.launch {
-                    runOcrAndSummary(
-                        "${selectedSubject}_${selectedFile}",
-                        selectedSubject!!,
-                        selectedFile!!,
-                        forceRefresh = true
-                    )
+                val subject = selectedSubject
+                val file = selectedFile
+                showAiSummaryToRefresh = false
+                if (subject != null && file != null) {
+                    scope.launch {
+                        runOcrAndSummary(
+                            "${subject}_$file",
+                            subject,
+                            file,
+                            forceRefresh = true
+                        )
+                    }
                 }
             },
             onDismiss = { showAiSummaryToRefresh = false },
+            confirmText = stringResource(R.string.aktualisieren_2),
             title = stringResource(R.string.mochtest_du_wirklich_deine_ai),
             text = stringResource(R.string.die_jetzige_geht_dabei_verloren)
         )
