@@ -1,5 +1,6 @@
 package com.tabslify.tabs.ainotify
 
+import android.app.NotificationManager
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -293,6 +294,8 @@ fun AiNotifyHost(svm: SharedViewModel = viewModel()) {
                         if (ok) {
                             session = null
                             AiNotifyStore.removeSession(context, active.sessionId)
+                            context.getSystemService(NotificationManager::class.java)
+                                ?.cancel(AI_NOTIFY_TAG, active.sessionId.hashCode())
                             svm.setPendingAiSession(null)
                         }
                     }
