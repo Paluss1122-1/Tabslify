@@ -19,6 +19,7 @@ import androidx.core.net.toUri
 import com.tabslify.BuildConfig
 import com.tabslify.R
 import com.tabslify.core.functions.canNotify
+import com.tabslify.core.functions.getAppCheckToken
 import com.tabslify.core.ui.MenuItem
 import com.tabslify.core.ui.getDeviceName
 import io.github.jan.supabase.annotations.SupabaseInternal
@@ -445,11 +446,15 @@ object Config {
         readTimeoutMs: Int = 15_000
     ): HttpURLConnection? = withContext(Dispatchers.IO) {
         val sha256 = getAppSignatureSha256(context) ?: return@withContext null
+        val appCheckToken = getAppCheckToken()
         (URL("$SUPABASE_URL/functions/v1/api-proxy").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Authorization", "Bearer $SUPABASE_PUBLISHABLE_KEY")
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("X-Android-Cert", sha256)
+            if (appCheckToken != null) {
+                setRequestProperty("X-Firebase-AppCheck", appCheckToken)
+            }
             connectTimeout = 15_000
             readTimeout = readTimeoutMs
             doOutput = true
