@@ -14,7 +14,6 @@ import com.tabslify.core.objects.tNotify
 import com.tabslify.services.MediaPlayerService
 import com.tabslify.spotifydownloader_own.domain.DownloadRepository
 import com.tabslify.spotifydownloader_own.domain.DownloadState
-import com.tabslify.spotifydownloader_own.domain.generateAndSaveHashtags
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,14 +39,6 @@ class DownloadViewModel(
             repository.downloadTrack(url).collect { state ->
                 _downloadState.value = state
                 if (state is DownloadState.Success) {
-                    generateAndSaveHashtags(
-                        ctx = appContext,
-                        trackId = state.trackId,
-                        title = state.title,
-                        artist = state.artist,
-                        album = state.album,
-                        fileUri = state.fileUri
-                    )
                     showSongDownloadedNotification(state)
                 }
             }
@@ -74,7 +65,8 @@ class DownloadViewModel(
         val notification = NotificationCompat.Builder(appContext, DOWNLOAD_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("✓ Song heruntergeladen")
-            .setContentText("${state.artist} – ${state.title}")
+            .setContentText(state.note?.let { "${state.artist} – ${state.title}\n$it" }
+                ?: "${state.artist} – ${state.title}")
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
