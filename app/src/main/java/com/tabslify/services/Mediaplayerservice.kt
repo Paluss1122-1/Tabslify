@@ -56,6 +56,7 @@ import com.tabslify.R
 import com.tabslify.core.activities.MainActivity
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.functions.errorInsert
+import com.tabslify.core.functions.markPodcastEpisodeCompleted
 import com.tabslify.core.functions.showSimpleNotificationExtern
 import com.tabslify.core.objects.Config.COMPLETED_PODCASTS
 import com.tabslify.core.objects.Config.MEDIA_PLAYER
@@ -78,7 +79,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLDecoder
 import java.time.Instant
-import java.time.LocalTime.now
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
@@ -106,6 +106,8 @@ class MediaPlayerService : MediaSessionService() {
 
         private const val ACTION_PODCAST_PLAY = "com.tabslify.ACTION_PODCAST_PLAY"
         const val ACTION_PODCAST_PLAY_SPECIFIED = "com.tabslify.ACTION_PODCAST_PLAY_SPECIFIED"
+        const val EXTRA_PODCAST_SAFE_TITLE = "safeTitle"
+        const val EXTRA_PODCAST_AUDIO_URL = "audioUrl"
         private const val ACTION_PODCAST_PAUSE = "com.tabslify.ACTION_PODCAST_PAUSE"
         private const val ACTION_PODCAST_REWIND = "com.tabslify.ACTION_PODCAST_REWIND"
         private const val ACTION_PODCAST_FORWARD = "com.tabslify.ACTION_PODCAST_FORWARD"
@@ -442,9 +444,27 @@ class MediaPlayerService : MediaSessionService() {
                 }
             )
         }
+
+        fun playLocalPodcast(context: Context, fileName: String, audioUrl: String) {
+            ensureServiceIsRunning(context)
+            context.startService(
+                Intent(context, MediaPlayerService::class.java).apply {
+                    action = ACTION_PODCAST_PLAY_SPECIFIED
+                    putExtra(EXTRA_PODCAST_SAFE_TITLE, fileName)
+                    putExtra(EXTRA_PODCAST_AUDIO_URL, audioUrl)
+                }
+            )
+        }
     }
 
-    data class Song(val uri: Uri, val name: String, val path: String)
+    data class Song(
+        val uri: Uri,
+        val name: String,
+        val path: String,
+        val hashtags: String? = null,
+        val artist: String = "",
+        val album: String = ""
+    )
 
     data class Podcast(
         val uri: Uri,
@@ -458,7 +478,8 @@ class MediaPlayerService : MediaSessionService() {
         val id: String = UUID.randomUUID().toString(),
         val name: String,
         val type: PlaylistType,
-        val items: MutableList<String> = mutableListOf()
+        val items: MutableList<String> = mutableListOf(),
+        val currentSongIndex: Int = 0
     )
 
     enum class PlaylistType {
@@ -487,6 +508,8 @@ class MediaPlayerService : MediaSessionService() {
     private var podcasts: List<Podcast> = emptyList()
     private var podcastQueue: MutableList<String> = mutableListOf()
     private var currentPodcast: Podcast? = null
+    private var pendingPodcastAudioUrl: String? = null
+    private var currentPodcastAudioUrl: String? = null
 
     @Volatile
     private var isPlayingPodcast = false
@@ -516,25 +539,6 @@ class MediaPlayerService : MediaSessionService() {
     private var podcastSessionStartedAt: Long = 0L
     private var podcastSessionStartPos: Long = 0L
     private val showNameCache = mutableMapOf<String, String>()
-
-    private var autoPauseRunnable: Runnable? = null
-    private val autoPauseDelayMs = 20 * 60 * 1000L
-
-    private fun scheduleAutoPause() {
-        if (now().hour in 6..20) {
-            return
-        }
-        autoPauseRunnable?.let { handler.removeCallbacks(it) }
-        autoPauseRunnable = Runnable {
-            if (isPlayingPodcast) pausePodcast()
-        }
-        handler.postDelayed(autoPauseRunnable!!, autoPauseDelayMs)
-    }
-
-    private fun cancelAutoPause() {
-        autoPauseRunnable?.let { handler.removeCallbacks(it) }
-        autoPauseRunnable = null
-    }
 
     private fun hasAudioPermission(): Boolean = hasAudioPermission(this)
 
@@ -689,10 +693,13 @@ class MediaPlayerService : MediaSessionService() {
             }
 
             ACTION_PODCAST_PLAY_SPECIFIED -> {
-                val target = intent.getStringExtra("safeTitle") ?: return START_STICKY
+                val target = intent.getStringExtra(EXTRA_PODCAST_SAFE_TITLE)
+                    ?: return START_STICKY
                 if (!hasAudioPermission()) return START_STICKY
+                pendingPodcastAudioUrl = intent.getStringExtra(EXTRA_PODCAST_AUDIO_URL)
                 ensurePodcastMode()
                 var result: Podcast? = null
+                var exact: Podcast? = null
                 val proj = arrayOf(
                     MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME,
                     MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.TITLE
@@ -726,13 +733,13 @@ class MediaPlayerService : MediaSessionService() {
                                 if (!title.isNullOrBlank() && title != "<unknown>") title else name.substringBeforeLast(
                                     '.'
                                 )
-                            result = Podcast(contentUri, displayName, data)
+                            val candidate = Podcast(contentUri, displayName, data)
+                            result = candidate
+                            if (name.equals(target, ignoreCase = true)) exact = candidate
                         }
                     }
                 }
-                playPodcast(
-                    result
-                )
+                playPodcast(exact ?: result)
             }
 
             ACTION_PODCAST_PAUSE -> {
@@ -833,22 +840,22 @@ class MediaPlayerService : MediaSessionService() {
             }
 
             "ADD_CURRENT_TO_PLAYLIST" -> {
-                val name: String? = intent.getStringExtra("PLAYLIST_NAME")
-                if (name != null) {
+                val ref: String? = intent.getStringExtra("PLAYLIST_NAME")
+                if (ref != null) {
                     val path = when (currentMode) {
                         MODE_MUSIC -> playlist.getOrNull(currentSongIndex)?.path
                         else -> null
                     }
 
-                    if (path != null && addToPlaylist(name, path)) {
-                        val pl = playlists.find { it.name == name }
+                    val target = if (path != null) addToPlaylist(ref, path) else null
+                    if (target != null) {
                         val itemName = when (currentMode) {
                             MODE_MUSIC -> playlist.find { it.path == path }?.name
                             else -> null
                         }
                         showSimpleNotificationExtern(
                             getString(R.string.hinzugefugt),
-                            "\"$itemName\" → \"${pl?.name}\"",
+                            "\"$itemName\" → \"${target.name}\"",
                             10.seconds,
                             context = this
                         )
@@ -1016,8 +1023,6 @@ class MediaPlayerService : MediaSessionService() {
 
         screenReceiver?.let { unregisterReceiver(it) }
         screenReceiver = null
-
-        cancelAutoPause()
 
         if (!wasInitialized) {
             updateNotJob?.cancel()
@@ -1349,6 +1354,7 @@ class MediaPlayerService : MediaSessionService() {
                 isPlayingMusic = true
                 currentSongIndex = nextIndex
                 saveMusicState()
+                saveActivePlaylistIndex()
                 updateNotification()
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
 
@@ -1640,7 +1646,6 @@ class MediaPlayerService : MediaSessionService() {
                 isPlayingPodcast = true
                 podcastSessionStartedAt = System.currentTimeMillis()
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
-                scheduleAutoPause()
                 updateNotification()
             }
             return
@@ -1661,7 +1666,6 @@ class MediaPlayerService : MediaSessionService() {
             podcastSessionStartedAt = System.currentTimeMillis()
             isPlayingPodcast = true
             updateNotification()
-            scheduleAutoPause()
             return
         }
 
@@ -1670,6 +1674,8 @@ class MediaPlayerService : MediaSessionService() {
 
     private fun loadPodcast(podcast: Podcast) {
         podcastPlayer?.release(); podcastPlayer = null
+        currentPodcastAudioUrl = pendingPodcastAudioUrl
+        pendingPodcastAudioUrl = null
 
         if (currentPodcast?.path != podcast.path) {
             currentPodcast = podcast
@@ -1708,7 +1714,6 @@ class MediaPlayerService : MediaSessionService() {
                 updateNotification()
                 start()
                 musicPrefs.editAsync { putBoolean("is_playing", true) }
-                scheduleAutoPause()
             }
             podcastSessionStartedAt = System.currentTimeMillis()
             podcastSessionStartPos = podcast.savedPosition
@@ -1718,7 +1723,6 @@ class MediaPlayerService : MediaSessionService() {
     }
 
     private fun pausePodcast() {
-        cancelAutoPause()
         if (!isPlayingPodcast) return
         val player = podcastPlayer ?: run { isPlayingPodcast = false; return }
         try {
@@ -1742,7 +1746,6 @@ class MediaPlayerService : MediaSessionService() {
         val newPos = maxOf(0, player.currentPosition - SKIP_TIME_MS)
         player.seekTo(newPos)
         currentPodcast?.let { savePodcastPosition(it.path, newPos.toLong()) }
-        if (isPlayingPodcast) scheduleAutoPause()
         updateNotification()
     }
 
@@ -1751,7 +1754,6 @@ class MediaPlayerService : MediaSessionService() {
         val newPos = minOf(player.duration, player.currentPosition + skipMs)
         player.seekTo(newPos)
         currentPodcast?.let { savePodcastPosition(it.path, newPos.toLong()) }
-        if (isPlayingPodcast) scheduleAutoPause()
         updateNotification()
     }
 
@@ -1765,6 +1767,8 @@ class MediaPlayerService : MediaSessionService() {
 
             savePodcastSession()
         }
+
+        markCurrentPodcastCompleted()
 
         try {
             podcastPlayer?.stop(); podcastPlayer?.release(); podcastPlayer = null
@@ -1789,6 +1793,24 @@ class MediaPlayerService : MediaSessionService() {
         } else {
             currentPodcast = null; updateNotification()
         }
+    }
+
+    private fun markCurrentPodcastCompleted() {
+        val isStream = currentPodcast == null
+        val audioUrl = currentPodcastAudioUrl.orEmpty()
+        val fileName = currentPodcast?.path?.substringAfterLast('/').orEmpty()
+        val episodeTitle = if (isStream) currentStreamName else currentPodcast?.name.orEmpty()
+        val showName = if (isStream) currentStreamShowName else ""
+        currentPodcastAudioUrl = null
+        if (audioUrl.isBlank() && fileName.isBlank()) return
+        markPodcastEpisodeCompleted(
+            applicationContext,
+            audioUrl,
+            fileName,
+            episodeTitle,
+            showName,
+            if (isStream) "stream" else "local"
+        )
     }
 
     private fun setPlaybackSpeed(speed: Float) {
@@ -2370,9 +2392,19 @@ class MediaPlayerService : MediaSessionService() {
         return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
     }
 
+    private fun saveActivePlaylistIndex() {
+        activePlaylistId?.let { id ->
+            val idx = playlists.indexOfFirst { it.id == id }
+            if (idx >= 0) {
+                playlists[idx] = playlists[idx].copy(currentSongIndex = currentSongIndex)
+                savePlaylists()
+            }
+        }
+    }
+
     private fun savePlaylists() {
         val json = playlists.joinToString("\n---\n") { pl ->
-            "${pl.id}:::${pl.name}:::${pl.type}:::${pl.items.joinToString("|~~|")}"
+            "${pl.id}:::${pl.name}:::${pl.type}:::${pl.items.joinToString("|~~|")}:::${pl.currentSongIndex}"
         }
         musicPrefs.edit {
             putString(KEY_PLAYLISTS, json)
@@ -2387,7 +2419,7 @@ class MediaPlayerService : MediaSessionService() {
                 playlists.clear()
                 val lines = json.split("\n---\n")
                 lines.forEach { line ->
-                    val parts = line.split(":::", limit = 4)
+                    val parts = line.split(":::", limit = 5)
                     if (parts.size >= 3) {
                         val id = parts[0]
                         val name = parts[1]
@@ -2395,7 +2427,10 @@ class MediaPlayerService : MediaSessionService() {
                         val items = if (parts.size > 3 && parts[3].isNotEmpty())
                             parts[3].split("|~~|").toMutableList()
                         else mutableListOf()
-                        playlists.add(Playlist(id, name, type, items))
+                        val index = if (parts.size > 4 && parts[4].isNotEmpty())
+                            parts[4].toIntOrNull() ?: 0
+                        else 0
+                        playlists.add(Playlist(id, name, type, items, index))
                     }
                 }
             } catch (_: Exception) {
@@ -2420,8 +2455,8 @@ class MediaPlayerService : MediaSessionService() {
         return playlist.id
     }
 
-    fun addToPlaylist(name: String, itemPath: String): Boolean {
-        val pl = playlists.find { it.id == name } ?: return false
+    fun addToPlaylist(ref: String, itemPath: String): Playlist? {
+        val pl = playlists.find { it.id == ref || it.name == ref } ?: return null
 
         if (pl.type != PlaylistType.MUSIC) {
             showSimpleNotificationExtern(
@@ -2430,15 +2465,15 @@ class MediaPlayerService : MediaSessionService() {
                 10.seconds,
                 context = this
             )
-            return false
+            return null
         }
 
         if (!pl.items.contains(itemPath)) {
             pl.items.add(itemPath)
             savePlaylists()
-            return true
+            return pl
         }
-        return false
+        return null
     }
 
     fun deletePlaylist(playlistId: String): Boolean {
@@ -2471,8 +2506,14 @@ class MediaPlayerService : MediaSessionService() {
         if (playlistSongs.isEmpty()) return false
 
         this.playlist = playlistSongs
-        currentSongIndex = 0
+        val startIndex = playlist.currentSongIndex.coerceIn(0, playlistSongs.size - 1)
+        currentSongIndex = startIndex
         activePlaylistId = playlistId
+
+        val plIdx = playlists.indexOfFirst { it.id == playlistId }
+        if (plIdx >= 0) {
+            playlists[plIdx] = playlists[plIdx].copy(currentSongIndex = startIndex)
+        }
         savePlaylists()
 
         if (isPlayingPodcast) {
@@ -2485,7 +2526,7 @@ class MediaPlayerService : MediaSessionService() {
 
         musicPlayer?.release()
         musicPlayer = null
-        loadSong(0)
+        loadSong(currentSongIndex)
 
         saveMusicState()
         updateNotification()
@@ -2920,6 +2961,7 @@ class MediaPlayerService : MediaSessionService() {
         podcastPlayer = null
         isPlayingPodcast = false
         currentPodcast = null
+        currentPodcastAudioUrl = url
 
         currentStreamName = url.substringAfterLast("/").substringBeforeLast(".")
         currentStreamShowName = ""
@@ -2970,7 +3012,6 @@ class MediaPlayerService : MediaSessionService() {
                             podcastSessionStartedAt = System.currentTimeMillis()
                             podcastSessionStartPos = 0L
                             musicPrefs.editAsync { putBoolean("is_playing", true) }
-                            scheduleAutoPause()
                             updateNotification()
                         }
                         setOnCompletionListener {
