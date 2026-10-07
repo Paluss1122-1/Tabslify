@@ -24,6 +24,7 @@ import com.tabslify.R
 import com.tabslify.core.objects.prvt
 import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.AiTarget
 import com.tabslify.quiethoursnotificationhelper.askServer
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     val availableModels
         get() = when (currentMode) {
             "Nvidia" -> nvidiaModels
+            "OpenRouter" -> openrouterModels
             "Server" -> serverModels
             "Gemini" -> geminiModels
             else -> emptyList()
@@ -269,18 +271,30 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 txt,
                 history,
                 pic,
+                target = AiTarget.AITab,
                 model = selectedModel.realname,
                 provider = AiProvider.NVIDIA,
                 onToken = onToken
             ) ?: ctx.getString(R.string.fehler)
 
             "Server" -> askServer(history, txt, selectedModel.realname, pic)
+            "OpenRouter" -> sendAiRequest(
+                ctx,
+                txt,
+                history,
+                pic,
+                target = AiTarget.AITab,
+                model = selectedModel.realname,
+                provider = AiProvider.OPENROUTER,
+                onToken = onToken
+            ) ?: ctx.getString(R.string.fehler)
             "Gemini" -> sendAiRequest(
                 context = ctx,
                 userMessage = txt,
                 history = history,
                 pic = pic,
                 audioUri = selectedAudioUri,
+                target = AiTarget.AITab,
                 model = selectedModel.realname,
                 provider = AiProvider.GEMINI,
                 onToken = onToken
