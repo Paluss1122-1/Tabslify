@@ -192,9 +192,19 @@ fun AuthenticatorTab() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    LaunchedEffect(lockEnabled) {
+        if (lockEnabled && !isAuthenticated && !shouldShowPrompt) {
+            shouldShowPrompt = true
+        }
+    }
+
     LaunchedEffect(shouldShowPrompt) {
         if (shouldShowPrompt && lockEnabled && !isAuthenticated) {
-            delay(100.milliseconds)
+            delay(650.milliseconds)
+            if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || isAuthenticated) {
+                shouldShowPrompt = false
+                return@LaunchedEffect
+            }
             activeBiometricPrompt?.cancelAuthentication()
             showBiometricPrompt(
                 activity = activity,
