@@ -28,6 +28,8 @@ import com.tabslify.core.objects.Config.client
 import com.tabslify.core.objects.PrefsCleanup
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.objects.tNotify
+import com.tabslify.quiethoursnotificationhelper.AiTarget
+import com.tabslify.quiethoursnotificationhelper.aiSystemPrompt
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -403,7 +405,7 @@ suspend fun predictChargingTime(context: Context): Int? {
     }.getOrElse { "Berechtigung fehlt (PACKAGE_USAGE_STATS)" }
 
     val prompt = buildString {
-        appendLine("You are a battery charge-time prediction engine. Output ONLY a single integer: estimated minutes to reach 85%. No explanation, no units, no text.")
+        appendLine(aiSystemPrompt(AiTarget.ChargingPrediction))
         appendLine()
         appendLine("## DATA")
         appendLine("Current: ${sample.level}% → Target: 85% (${levelsNeeded}% remaining)")
