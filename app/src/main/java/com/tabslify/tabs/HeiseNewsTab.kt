@@ -6,6 +6,13 @@ import android.graphics.Paint
 import android.text.Html
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -24,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -90,6 +98,8 @@ import com.tabslify.core.TabNavigationViewModel
 import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
 import com.tabslify.quiethoursnotificationhelper.AiProvider
+import com.tabslify.quiethoursnotificationhelper.AiTarget
+import com.tabslify.quiethoursnotificationhelper.OPENROUTER_DEFAULT_MODEL
 import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import com.tabslify.tabs.aitab.ChatMessage
 import dev.chrisbanes.haze.HazeInput
@@ -373,12 +383,6 @@ private data class HeiseTermQuestion(
     val question: String
 )
 
-/**
- * Der Prompt lässt die KI wichtige Begriffe als `[[Begriff::Frage]]` markieren.
- * Diese Funktion wandelt das in normale Markdown-Links (`[Begriff](ask://<index>)`) um,
- * damit der bestehende Markdown-Renderer sie klickbar darstellt, ohne dass die KI die
- * Frage selbst URL-kodieren müsste. Die eigentlichen Fragen werden separat zurückgegeben.
- */
 private val SUMMARY_TERM_MARKUP_REGEX = Regex("\\[\\[(.+?)::(.+?)]]")
 
 private const val HEISE_PREFS_NAME = "news_prefs"
@@ -520,6 +524,7 @@ fun HeiseNewsTabContent(
     val artikelKonntNichtGeoffnetMsg = stringResource(R.string.artikel_konnte_nicht_geoffnet_werden)
 
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     val articleTextCache = remember { mutableStateMapOf<String, String>() }
     val summaryCache = remember { mutableStateMapOf<String, String>() }
 
@@ -611,34 +616,18 @@ fun HeiseNewsTabContent(
             summaryError = null
             try {
                 val prompt = buildString {
-                    appendLine("Du bekommst den Volltext eines Artikels${article.source.takeIf { it.isNotBlank() }?.let { " von $it" } ?: ""}. Erstelle daraus eine sehr knappe, gut lesbare deutsche Zusammenfassung.")
-                    appendLine()
-                    appendLine("Format der Zusammenfassung:")
-                    appendLine("- Maximal 3 bis 4 kurze Bulletpoints (je maximal ein Satz) mit den wichtigsten Fakten, Zahlen, Produkt-/Versionsnamen und Auswirkungen.")
-                    appendLine("- Bleib strikt beim Inhalt des Textes, erfinde nichts.")
-                    appendLine("- Keine Füllwörter oder Wiederholungen, insgesamt so kurz wie möglich.")
-                    appendLine("- Schließe mit einer kurzen Einschätzung in maximal einem Satz ab.")
-                    appendLine()
-                    appendLine("Zusätzlich: Markiere 4 bis 8 zentrale Fachbegriffe, Produktnamen, Firmen, Personen oder Abkürzungen aus der Zusammenfassung, zu denen eine Rückfrage sinnvoll wäre. Nutze dafür GENAU diese Syntax, sonst nichts:")
-                    appendLine("[[Begriff::Frage]]")
-                    appendLine("- \"Begriff\" ist das kurze Wort/die kurze Wortgruppe (max. 3 Wörter) exakt wie im Fließtext.")
-                    appendLine("- \"Frage\" ist eine knappe, konkrete Rückfrage, die automatisch gestellt wird, wenn der Nutzer auf den Begriff tippt, z. B. \"Was ist Kubernetes und wofür wird es hier eingesetzt?\" oder \"Wer ist Person X und welche Rolle spielt sie hier?\".")
-                    appendLine("- Kein \"[[\" oder \"::\" oder \"]]\" innerhalb von Begriff oder Frage verwenden.")
-                    appendLine("- Verwende diese Markierung nur inline in den Bulletpoints, nicht im Einschätzungssatz, und nutze sonst kein Markdown-Link-Format.")
-                    appendLine("- Beispiel: \"- [[Kubernetes::Was ist Kubernetes und wofür wird es hier eingesetzt?]] erhält in Version 1.30 ein neues Feature ...\"")
-                    appendLine()
                     appendLine("Titel: ${article.title}")
                     appendLine("Quelle: ${article.link}")
                     appendLine()
-                    appendLine("Note: Der Nutzer sieht deine ganze antwort, also beginne **NICHT** beisielshaft mit 'alles klar hier ist deine Zusammenfassung', sondern beginne direkt")
                     append(articleText.take(ARTICLE_TEXT_LIMIT_FOR_AI))
                 }
                 val response = sendAiRequest(
                     context = context,
                     serviceKey = "heise_news_summary",
                     userMessage = prompt,
-                    target = "",
-                    provider = AiProvider.NVIDIA
+                    target = AiTarget.HeiseSummary,
+                    provider = AiProvider.OPENROUTER,
+                    model = OPENROUTER_DEFAULT_MODEL
                 )
                 val summaryResult = response?.ifBlank { null } ?: keineZusammenfassungMsg
                 summaryCache[article.link] = summaryResult
@@ -671,9 +660,6 @@ fun HeiseNewsTabContent(
             chatError = null
             try {
                 val prompt = buildString {
-                    appendLine("Beantworte die folgende Frage eines Nutzers zu einem Artikel${article.source.takeIf { it.isNotBlank() }?.let { " von $it" } ?: ""} kurz, präzise und auf Deutsch (2-5 Sätze, bei Bedarf mit Stichpunkten).")
-                    appendLine("Nutze primär den Artikeltext als Quelle. Ergänze offensichtliches Allgemeinwissen nur wenn nötig und sag klar, wenn etwas nicht im Artikel steht.")
-                    appendLine()
                     appendLine("Titel: ${article.title}")
                     appendLine("Artikeltext:")
                     appendLine(articleText.take(ARTICLE_TEXT_LIMIT_FOR_AI))
@@ -685,7 +671,9 @@ fun HeiseNewsTabContent(
                     serviceKey = "heise_news_summary",
                     history = priorHistory,
                     userMessage = prompt,
-                    target = "",
+                    target = AiTarget.HeiseQa,
+                    provider = AiProvider.OPENROUTER,
+                    model = OPENROUTER_DEFAULT_MODEL,
                     onToken = { delta ->
                         val current = messages[answerIndex]
                         messages[answerIndex] = current.copy(text = current.text + delta)
@@ -724,126 +712,144 @@ fun HeiseNewsTabContent(
         loadNews()
     }
 
-    selectedArticle?.let { article ->
-        BackHandler { selectedArticle = null }
-        LaunchedEffect(article.link) {
-            loadFullArticle(article)
-            if (!summaryCache.containsKey(article.link)) {
-                val savedSummary = loadSummaryFromPrefs(context, article.link)
-                if (savedSummary != null) {
-                    summaryCache[article.link] = savedSummary
-                    summaryCache.cap(20)
+    AnimatedContent(
+        targetState = selectedArticle,
+        modifier = Modifier.fillMaxSize(),
+        transitionSpec = {
+            if (targetState != null) {
+                (slideInVertically(animationSpec = tween(280)) { it / 8 } +
+                    fadeIn(animationSpec = tween(240)))
+                    .togetherWith(fadeOut(animationSpec = tween(120)))
+            } else {
+                fadeIn(animationSpec = tween(200)).togetherWith(
+                    slideOutVertically(animationSpec = tween(280)) { it / 8 } +
+                        fadeOut(animationSpec = tween(200))
+                )
+            }
+        },
+        label = "artikelAnsicht"
+    ) { shownArticle ->
+        if (shownArticle != null) {
+            BackHandler { selectedArticle = null }
+            LaunchedEffect(shownArticle.link) {
+                loadFullArticle(shownArticle)
+                if (!summaryCache.containsKey(shownArticle.link)) {
+                    val savedSummary = loadSummaryFromPrefs(context, shownArticle.link)
+                    if (savedSummary != null) {
+                        summaryCache[shownArticle.link] = savedSummary
+                        summaryCache.cap(20)
+                    }
+                }
+                if (!chatCache.containsKey(shownArticle.link)) {
+                    val savedChat = loadChatFromPrefs(context, shownArticle.link)
+                    if (savedChat.isNotEmpty()) {
+                        val list = mutableStateListOf<HeiseChatMessage>()
+                        list.addAll(savedChat)
+                        chatCache[shownArticle.link] = list
+                        chatCache.cap(20)
+                    }
                 }
             }
-            if (!chatCache.containsKey(article.link)) {
-                val savedChat = loadChatFromPrefs(context, article.link)
-                if (savedChat.isNotEmpty()) {
-                    val list = mutableStateListOf<HeiseChatMessage>()
-                    list.addAll(savedChat)
-                    chatCache[article.link] = list
-                    chatCache.cap(20)
-                }
-            }
-        }
-        HeiseArticleDetail(
-            article = article,
-            articleText = articleTextCache[article.link],
-            summary = summaryCache[article.link],
-            isLoadingArticle = loadingArticleLink == article.link,
-            isSummarizing = summarizingArticleLink == article.link,
-            articleError = articleError,
-            summaryError = summaryError,
-            chatMessages = chatCache[article.link] ?: emptyList(),
-            isAsking = askingArticleLink == article.link,
-            chatError = chatError,
-            onBack = { selectedArticle = null },
-            onRetryArticle = { loadFullArticle(article) },
-            onSummarize = { summarizeArticle(article) },
-            onSendChat = { question -> askAboutArticle(article, question) },
-            onTermQuestionClick = { question -> onTermQuestionClick(article, question) },
-            onOpenOriginal = {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, article.link.toUri()))
-                }.onFailure {
-                    Toast.makeText(
-                        context,
-                        artikelKonntNichtGeoffnetMsg,
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            },
-            modifier = modifier,
-            paddingValues = paddingValues
-        )
-        return
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Transparent)
-            .padding(
-                top = paddingValues.calculateTopPadding(),
-                bottom = paddingValues.calculateBottomPadding()
+            HeiseArticleDetail(
+                article = shownArticle,
+                articleText = articleTextCache[shownArticle.link],
+                summary = summaryCache[shownArticle.link],
+                isLoadingArticle = loadingArticleLink == shownArticle.link,
+                isSummarizing = summarizingArticleLink == shownArticle.link,
+                articleError = articleError,
+                summaryError = summaryError,
+                chatMessages = chatCache[shownArticle.link] ?: emptyList(),
+                isAsking = askingArticleLink == shownArticle.link,
+                chatError = chatError,
+                onBack = { selectedArticle = null },
+                onRetryArticle = { loadFullArticle(shownArticle) },
+                onSummarize = { summarizeArticle(shownArticle) },
+                onSendChat = { question -> askAboutArticle(shownArticle, question) },
+                onTermQuestionClick = { question -> onTermQuestionClick(shownArticle, question) },
+                onOpenOriginal = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, shownArticle.link.toUri()))
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            artikelKonntNichtGeoffnetMsg,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                modifier = modifier,
+                paddingValues = paddingValues
             )
-            .padding(horizontal = 12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "heise & SRF News",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (articles.isEmpty()) stringResource(R.string.aktuelle_news_per_atom_feed) else pluralStringResource(
-                        R.plurals.meldungen_geladen,
-                        articles.size,
-                        articles.size
-                    ),
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontSize = 12.sp
-                )
-            }
-            IconButton(onClick = { loadNews(forceRefresh = true) }, enabled = !isLoading) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp,
-                        color = Color.White
+        } else {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent)
+                    .padding(
+                        top = paddingValues.calculateTopPadding(),
+                        bottom = paddingValues.calculateBottomPadding()
                     )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = stringResource(R.string.news_aktualisieren),
-                        tint = Color.White
-                    )
-                }
-            }
-        }
-
-        when {
-            isLoading && articles.isEmpty() -> LoadingNewsState()
-            errorMessage != null && articles.isEmpty() -> ErrorNewsState(errorMessage!!) { loadNews() }
-            articles.isEmpty() -> EmptyNewsState { loadNews() }
-            else -> LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
+                    .padding(horizontal = 12.dp)
             ) {
-                items(articles, key = { it.id }) { article ->
-                    HeiseNewsCard(
-                        article = article,
-                        onClick = { selectedArticle = article }
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "heise & SRF News",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (articles.isEmpty()) stringResource(R.string.aktuelle_news_per_atom_feed) else pluralStringResource(
+                                R.plurals.meldungen_geladen,
+                                articles.size,
+                                articles.size
+                            ),
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 12.sp
+                        )
+                    }
+                    IconButton(onClick = { loadNews(forceRefresh = true) }, enabled = !isLoading) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.news_aktualisieren),
+                                tint = Color.White
+                            )
+                        }
+                    }
                 }
-                item { Spacer(Modifier.height(8.dp)) }
+
+                when {
+                    isLoading && articles.isEmpty() -> LoadingNewsState()
+                    errorMessage != null && articles.isEmpty() -> ErrorNewsState(errorMessage!!) { loadNews() }
+                    articles.isEmpty() -> EmptyNewsState { loadNews() }
+                    else -> LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(articles, key = { it.id }) { article ->
+                            HeiseNewsCard(
+                                article = article,
+                                onClick = { selectedArticle = article }
+                            )
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
+                    }
+                }
             }
         }
     }
