@@ -36,6 +36,7 @@ private const val KEY_CACHE = "new_episodes_cache"
 private const val KEY_CHECKED_AT = "new_episodes_checked_at"
 private const val KEY_SEEN_PREFIX = "seen_"
 private const val KEY_DOWNLOADED_PREFIX = "dl_"
+private const val KEY_PENDING_PREFIX = "pending_"
 
 private const val FEED_TIMEOUT_MS = 15_000
 private const val MAX_REDIRECTS = 5
@@ -80,8 +81,37 @@ fun markPodcastEpisodeDownloaded(context: Context, audioUrl: String) {
     podcastDownloadPrefs(context).edit { putBoolean(KEY_DOWNLOADED_PREFIX + audioUrl, true) }
 }
 
+fun clearPodcastEpisodeDownloaded(context: Context, audioUrl: String) {
+    podcastDownloadPrefs(context).edit { remove(KEY_DOWNLOADED_PREFIX + audioUrl) }
+}
+
 fun isPodcastEpisodeDownloaded(context: Context, audioUrl: String): Boolean =
     podcastDownloadPrefs(context).getBoolean(KEY_DOWNLOADED_PREFIX + audioUrl, false)
+
+fun loadDownloadedPodcastUrls(context: Context): Set<String> {
+    val urls = mutableSetOf<String>()
+    for ((key, value) in podcastDownloadPrefs(context).all) {
+        if (key.startsWith(KEY_DOWNLOADED_PREFIX) && value == true) {
+            urls.add(key.removePrefix(KEY_DOWNLOADED_PREFIX))
+        }
+    }
+    return urls
+}
+
+fun loadPendingPodcastDownloads(context: Context): Map<Long, String> {
+    val result = mutableMapOf<Long, String>()
+    for ((key, value) in podcastDownloadPrefs(context).all) {
+        if (!key.startsWith(KEY_PENDING_PREFIX) || value !is String) continue
+        val downloadId = key.removePrefix(KEY_PENDING_PREFIX).toLongOrNull() ?: continue
+        val audioUrl = runCatching { JSONObject(value).optString("audioUrl") }.getOrDefault("")
+        if (audioUrl.isNotEmpty()) result[downloadId] = audioUrl
+    }
+    return result
+}
+
+suspend fun loadDownloadedPodcastFiles(): Set<String> = withContext(Dispatchers.IO) {
+    podcastDestDir().listFiles()?.filter { it.isFile }?.map { it.name }?.toSet() ?: emptySet()
+}
 
 fun loadCachedNewEpisodes(context: Context): List<JSONObject> {
     val raw = podcastCheckPrefs(context).getString(KEY_CACHE, null) ?: return emptyList()
