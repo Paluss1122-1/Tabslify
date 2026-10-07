@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 
 const val AI_NOTIFY_TOPIC = "ai_owner"
 const val AI_NOTIFY_CHANNEL = "ai_notify"
+const val AI_NOTIFY_TAG = "ai_notify"
 const val AI_NOTIFY_KIND_INFO = "info"
 const val AI_NOTIFY_KIND_QUESTIONS = "questions"
 const val AI_NOTIFY_KIND_CANCEL = "cancel"
