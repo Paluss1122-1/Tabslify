@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.ActivityRecognition
@@ -23,6 +24,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.Tasks
+import com.tabslify.core.functions.PcCommands
 import com.tabslify.core.objects.Config
 import com.tabslify.quiethoursnotificationhelper.getHomeWifiStatus
 import com.tabslify.quiethoursnotificationhelper.isLaptopConnected
@@ -48,6 +50,8 @@ data class ExploreTrackerInfo(
     val geofenceRegistered: Boolean = false,
     val geofenceError: String? = null,
     val lastWifiHome: Boolean? = null,
+    val lastRecheckAt: String? = null,
+    val lastNetwork: String? = null,
     val isNight: Boolean = false,
     val isEnabled: Boolean = false,
 )
@@ -64,14 +68,8 @@ class ExploreGeofenceReceiver : BroadcastReceiver() {
         if (event.hasError()) return
 
         when (event.geofenceTransition) {
-            Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                ExploreLocationTracker.stop(context)
-                ExploreLocationTracker.onArrivedHome(context)
-            }
-            Geofence.GEOFENCE_TRANSITION_EXIT -> {
-                ExploreLocationTracker.start(context)
-                ExploreLocationTracker.onLeftHome(context)
-            }
+            Geofence.GEOFENCE_TRANSITION_ENTER -> ExploreLocationTracker.onGeofenceEnter(context)
+            Geofence.GEOFENCE_TRANSITION_EXIT -> ExploreLocationTracker.onGeofenceExit(context)
         }
     }
 }
@@ -96,6 +94,7 @@ object ExploreLocationTracker {
 
     private const val GEOFENCE_ID = "HOME"
     private const val GEOFENCE_RADIUS = 100f
+    private const val GEOFENCE_TRANSITION_COOLDOWN_MS = 10 * 60_000L
     const val HOME_WIFI_SSID = "FRITZ!Box 5590 XO"
     private const val NIGHT_START_HOUR = 0
     private const val NIGHT_END_HOUR = 5
@@ -129,6 +128,23 @@ object ExploreLocationTracker {
     @Volatile
     private var isEnabled = false
 
+    @Volatile
+    private var serviceRunning = false
+
+    @Volatile
+    private var geofenceArmed = false
+
+    private val handler = Handler(Looper.getMainLooper())
+
+    @Volatile
+    private var lastGeofenceEnter = false
+
+    @Volatile
+    private var lastGeofenceTransitionAt = 0L
+
+    @Volatile
+    private var recheckToken = 0L
+
     private fun isNightTime(): Boolean {
         val hour = Instant.now().atZone(java.time.ZoneId.systemDefault()).hour
         return hour in NIGHT_START_HOUR until NIGHT_END_HOUR
@@ -147,6 +163,117 @@ object ExploreLocationTracker {
     fun onLeftHome(context: Context) {
         if (isLaptopConnected) {
             stopAllSyncServices(context.applicationContext)
+        }
+        PcCommands.queue(PcCommands.LAMP_OFF, source = "explore_verlassen")
+    }
+
+    fun onGeofenceEnter(context: Context) {
+        if (swallowedByCooldown(enter = true)) {
+            scheduleRecheckAfterCooldown(context)
+            return
+        }
+        stop(context)
+        onArrivedHome(context)
+    }
+
+    fun onGeofenceExit(context: Context) {
+        if (swallowedByCooldown(enter = false)) {
+            scheduleRecheckAfterCooldown(context)
+            return
+        }
+        start(context)
+        onLeftHome(context)
+    }
+
+    private fun swallowedByCooldown(enter: Boolean): Boolean {
+        val now = System.currentTimeMillis()
+        if (lastGeofenceEnter == enter || now - lastGeofenceTransitionAt >= GEOFENCE_TRANSITION_COOLDOWN_MS) {
+            lastGeofenceEnter = enter
+            lastGeofenceTransitionAt = now
+            return false
+        }
+        return true
+    }
+
+    private fun scheduleRecheckAfterCooldown(context: Context) {
+        val appCtx = context.applicationContext
+        val remaining = (GEOFENCE_TRANSITION_COOLDOWN_MS - (System.currentTimeMillis() - lastGeofenceTransitionAt))
+            .coerceIn(1_000L, GEOFENCE_TRANSITION_COOLDOWN_MS)
+        recheckToken++
+        val token = recheckToken
+        handler.postDelayed({
+            if (token == recheckToken) {
+                recheck(appCtx)
+            }
+        }, remaining)
+    }
+
+    private fun startTracking(context: Context) {
+        val appCtx = context.applicationContext
+        if (isNightTime() || serviceRunning) {
+            return
+        }
+        val hasLocationPermission =
+            ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!hasLocationPermission) {
+            return
+        }
+        isEnabled = true
+        _trackerInfo.value = _trackerInfo.value.copy(isNight = false, isEnabled = true)
+        try {
+            ContextCompat.startForegroundService(appCtx, Intent(appCtx, ExploreForegroundService::class.java))
+        } catch (_: Exception) {
+            isEnabled = false
+            _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
+            _trackerStatus.value = "Inaktiv (FGS nicht gestartet)"
+        }
+    }
+
+    fun recheck(context: Context, network: String? = null) {
+        val appCtx = context.applicationContext
+
+        if (isNightTime()) {
+            _trackerStatus.value = "Pausiert (Nacht)"
+            _trackerInfo.value = _trackerInfo.value.copy(isNight = true, isEnabled = false)
+            ExploreNightRestartWorker.schedule(appCtx)
+            return
+        }
+        ExploreNightRestartWorker.cancel(appCtx)
+
+        _trackerInfo.value = _trackerInfo.value.copy(
+            isNight = false,
+            lastRecheckAt = Instant.now().toString(),
+            lastNetwork = network,
+        )
+
+        try {
+            registerGeofence(appCtx)
+        } catch (_: Exception) {
+        }
+
+        if (!serviceRunning) {
+            _trackerStatus.value = "Warte auf Geofence"
+        }
+
+        getHomeWifiStatus(appCtx, HOME_WIFI_SSID) { isHomeWifi ->
+            _trackerInfo.value = _trackerInfo.value.copy(lastWifiHome = isHomeWifi)
+            if (isHomeWifi) {
+                _trackerStatus.value = "Gestoppt (Zuhause)"
+                stop(appCtx)
+                onArrivedHome(appCtx)
+                return@getHomeWifiStatus
+            }
+            evaluateCurrentLocation(appCtx) { distanceHome ->
+                if (distanceHome <= GEOFENCE_RADIUS) {
+                    _trackerStatus.value = "Zuhause"
+                    onArrivedHome(appCtx)
+                } else {
+                    _trackerStatus.value = "Außerhalb"
+                    startTracking(appCtx)
+                    onLeftHome(appCtx)
+                }
+            }
         }
     }
 
@@ -179,6 +306,10 @@ object ExploreLocationTracker {
             homeLng = homeLng,
         )
 
+        if (geofenceArmed) {
+            return
+        }
+
         val geofence = Geofence.Builder()
             .setRequestId(GEOFENCE_ID)
             .setCircularRegion(homeLat, homeLng, GEOFENCE_RADIUS)
@@ -200,12 +331,14 @@ object ExploreLocationTracker {
         LocationServices.getGeofencingClient(context)
             .addGeofences(request, geofencePendingIntent(context))
             .addOnSuccessListener {
+                geofenceArmed = true
                 _trackerInfo.value = _trackerInfo.value.copy(
                     geofenceRegistered = true,
                     geofenceError = null,
                 )
             }
             .addOnFailureListener { e ->
+                geofenceArmed = false
                 _trackerInfo.value = _trackerInfo.value.copy(
                     geofenceRegistered = false,
                     geofenceError = e.message,
@@ -215,6 +348,7 @@ object ExploreLocationTracker {
 
     fun start(context: Context) {
         val appCtx = context.applicationContext
+        ExploreNetworkWatcher.arm(appCtx)
 
         if (isNightTime()) {
             _trackerStatus.value = "Pausiert (Nacht)"
@@ -228,40 +362,17 @@ object ExploreLocationTracker {
         }
         isEnabled = true
         _trackerStatus.value = "Startet..."
-        _trackerInfo.value = _trackerInfo.value.copy(isNight = false, isEnabled = true)
-
-        try {
-            registerGeofence(appCtx)
-        } catch (_: Exception) {
-        }
-
-        _trackerStatus.value = "Warte auf Geofence"
         _trackerInfo.value = _trackerInfo.value.copy(
             isNight = false,
             isEnabled = true,
             lastWifiHome = null,
         )
-        evaluateCurrentLocation(appCtx)
 
-        getHomeWifiStatus(appCtx, HOME_WIFI_SSID) { isHomeWifi ->
-            _trackerInfo.value = _trackerInfo.value.copy(lastWifiHome = isHomeWifi)
-            if (isHomeWifi) {
-                _trackerStatus.value = "Gestoppt (Zuhause)"
-                stop(appCtx)
-                onArrivedHome(appCtx)
-                return@getHomeWifiStatus
-            }
-            if (isEnabled && !isNightTime() &&
-                (ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                    ContextCompat.checkSelfPermission(appCtx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-            ) {
-                ContextCompat.startForegroundService(appCtx, Intent(appCtx, ExploreForegroundService::class.java))
-            }
-        }
+        recheck(appCtx)
     }
 
     @SuppressLint("MissingPermission")
-    private fun evaluateCurrentLocation(context: Context) {
+    private fun evaluateCurrentLocation(context: Context, onResolved: (Float) -> Unit) {
         if (Config.LAT == 0.0 && Config.LON == 0.0) {
             _trackerStatus.value = "Warte auf Geofence"
             return
@@ -289,13 +400,7 @@ object ExploreLocationTracker {
                     distanceToHomeMeters = distanceHome,
                 )
 
-                if (distanceHome <= GEOFENCE_RADIUS) {
-                    _trackerStatus.value = "Zuhause"
-                    onArrivedHome(context)
-                } else {
-                    _trackerStatus.value = "Außerhalb"
-                    onLeftHome(context)
-                }
+                onResolved(distanceHome)
             } catch (_: Exception) {
                 _trackerStatus.value = "Warte auf Geofence"
             }
@@ -587,6 +692,7 @@ object ExploreLocationTracker {
         val appCtx = context.applicationContext
         scope.cancel()
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        serviceRunning = true
         startLocationUpdates(appCtx, ExploreRepository(appCtx))
         startActivityRecognitionUpdates(appCtx)
         ExploreWorker.schedule(appCtx)
@@ -594,6 +700,7 @@ object ExploreLocationTracker {
     }
 
     fun onServiceStartDenied() {
+        serviceRunning = false
         isEnabled = false
         _trackerStatus.value = "Inaktiv (FGS nicht gestartet)"
         _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
@@ -602,6 +709,7 @@ object ExploreLocationTracker {
     fun onServiceDestroyed(context: Context) {
         scope.cancel()
         val appCtx = context.applicationContext
+        serviceRunning = false
         locationCallback?.let {
             try {
                 getClient(appCtx).removeLocationUpdates(it)
@@ -609,9 +717,6 @@ object ExploreLocationTracker {
             }
         }
         stopActivityRecognitionUpdates(appCtx)
-        // Intentionally NOT cancelling ExploreWorker here: it should keep running as a
-        // watchdog if the service died unexpectedly (OS/OEM kill), instead of only being
-        // switched off on the next deliberate stop().
         locationCallback = null
         lastLocation = null
         currentMode = "UNKNOWN"
@@ -619,8 +724,6 @@ object ExploreLocationTracker {
         lastConfidentMode = "UNKNOWN"
         lastConfidentAt = 0L
         _currentActivity.value = ExploreActivityInfo()
-        // Reset isEnabled here too, otherwise the stale flag permanently blocks every
-        // future start() call (geofence/resume) until the app is restarted.
         isEnabled = false
         _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
     }
@@ -630,10 +733,6 @@ object ExploreLocationTracker {
         isEnabled = false
         _trackerInfo.value = _trackerInfo.value.copy(isEnabled = false)
 
-        try {
-            LocationServices.getGeofencingClient(appCtx).removeGeofences(listOf(GEOFENCE_ID))
-        } catch (_: Exception) {
-        }
         locationCallback?.let {
             try {
                 getClient(appCtx).removeLocationUpdates(it)
