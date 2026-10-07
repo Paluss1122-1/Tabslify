@@ -11,8 +11,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -38,6 +36,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.StickyNote2
@@ -60,7 +60,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,10 +77,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
@@ -96,9 +99,11 @@ import com.tabslify.core.ui.BgSurface
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
 import com.tabslify.core.ui.TextTertiary
+import com.tabslify.quiethoursnotificationhelper.AiTarget
 import com.tabslify.quiethoursnotificationhelper.callNvidiaVisionApi
 import com.tabslify.quiethoursnotificationhelper.flashcardVokabelnFlow
 import com.tabslify.quiethoursnotificationhelper.getPreferredAiProvider
+import com.tabslify.quiethoursnotificationhelper.sendAiRequest
 import com.tabslify.quiethoursnotificationhelper.trySendImageToLaptop
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Job
@@ -108,7 +113,8 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
-import kotlin.time.Duration.Companion.milliseconds
+import java.text.SimpleDateFormat
+import java.util.Date
 
 
 data class Vokabel(val latein: String, val deutsch: String, val id: Int)
@@ -123,7 +129,8 @@ data class VokabelProgress(
     val vokabelId: Int,
     val correctCount: Int = 0,
     val wrongCount: Int = 0,
-    val lastPracticed: Long = 0L
+    val lastPracticed: Long = 0L,
+    val streak: Int = 0
 )
 
 data class SetProgress(
@@ -133,21 +140,95 @@ data class SetProgress(
     val lastSession: Long = 0L
 )
 
+data class KartenVerweis(val setId: Long, val id: Int, val richtung: Boolean)
+
+data class LernKarte(
+    val vokabel: Vokabel,
+    val setId: Long,
+    val richtung: Boolean
+) {
+    val frage: String get() = if (richtung) vokabel.deutsch else vokabel.latein
+    val antwort: String get() = if (richtung) vokabel.latein else vokabel.deutsch
+    val verweis: String get() = "$setId:${vokabel.id}"
+}
+
+data class LernErgebnis(
+    val setId: Long,
+    val vokabel: Vokabel,
+    val richtig: Boolean,
+    val richtung: Boolean
+)
+
+data class AntwortFeedback(val karte: LernKarte, val gewaehlt: String, val korrekt: Boolean)
+
 data class SessionState(
-    val shuffledIds: List<Int>,
+    val cards: List<KartenVerweis>,
     val currentIndex: Int,
-    val correctIds: List<Int>,
-    val wrongIds: List<Int>,
-    val showDeutsch: Boolean,
+    val richtig: Int,
+    val falsch: Int,
+    val falscheKarten: List<LernKarte>,
+    val richtung: Boolean,
     val timestamp: Long
 )
 
-data class WidthState(
-    val id: Int,
-    val value: Int
-)
+enum class LernModus { AUSWAHL, TIPPEN, AUFECKEN }
 
-enum class VokabelTabScreen { DASHBOARD, HOME, UPLOAD, REVIEW, LEARN, MATERIALIEN }
+enum class VokabelTabScreen { DASHBOARD, HOME, UPLOAD, REVIEW, LEARN, MATERIALIEN, NOTEN }
+
+private val LEITNER_INTERVALLE = intArrayOf(0, 1, 2, 4, 8, 16, 32)
+
+private const val SITZT_STREAK = 2
+
+private const val TAG_MS = 24L * 60L * 60L * 1000L
+
+fun leitnerIntervallTage(streak: Int): Int =
+    LEITNER_INTERVALLE[streak.coerceIn(0, LEITNER_INTERVALLE.lastIndex)]
+
+fun istFaellig(progress: VokabelProgress?, jetzt: Long = System.currentTimeMillis()): Boolean {
+    if (progress == null || progress.lastPracticed == 0L) return true
+    return jetzt - progress.lastPracticed >= leitnerIntervallTage(progress.streak) * TAG_MS
+}
+
+fun faelligeVokabeln(
+    set: VokabelSet,
+    prefs: SharedPreferences,
+    jetzt: Long = System.currentTimeMillis()
+): List<Vokabel> {
+    val progress = loadSetProgress(prefs, set.createdAt)
+    return set.vokabeln.filter { istFaellig(progress.vokabelProgress[it.id], jetzt) }
+}
+
+private fun normiereAntwort(text: String): String =
+    text.trim().lowercase().replace(Regex("\\s+"), " ").trim()
+
+private fun falteDiakritika(text: String): String = text
+    .replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+
+fun vergleicheAntwort(eingabe: String, korrekt: String): Boolean {
+    val a = normiereAntwort(eingabe)
+    val b = normiereAntwort(korrekt)
+    if (a.isEmpty()) return false
+    if (a == b) return true
+    return falteDiakritika(a) == falteDiakritika(b)
+}
+
+private const val LERNMODUS_KEY = "lern_modus"
+
+fun ladeLernModus(prefs: SharedPreferences): LernModus {
+    val roh = prefs.getString(LERNMODUS_KEY, null) ?: return LernModus.AUSWAHL
+    return runCatching { LernModus.valueOf(roh) }.getOrDefault(LernModus.AUSWAHL)
+}
+
+fun speichereLernModus(prefs: SharedPreferences, modus: LernModus) {
+    prefs.edit { putString(LERNMODUS_KEY, modus.name) }
+}
+
+fun ladeHinweis(prefs: SharedPreferences, verweis: String): String? =
+    prefs.getString("hinweis_$verweis", null)?.takeIf { it.isNotBlank() }
+
+fun speichereHinweis(prefs: SharedPreferences, verweis: String, text: String) {
+    prefs.edit { putString("hinweis_$verweis", text) }
+}
 
 enum class ExtractionEngine { LAPTOP, NVIDIA, GEMINI }
 
@@ -195,8 +276,8 @@ fun VocabTab(paddingValues: PaddingValues) {
     var cachedSetName by remember { mutableStateOf<String?>(null) }
     var showSaveDialog by remember { mutableStateOf(false) }
     var saveNameInput by remember { mutableStateOf("") }
-    var lastWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
-    var currentWidths by remember { mutableStateOf<List<WidthState>>(emptyList()) }
+    var lernKarten by remember { mutableStateOf<List<LernKarte>>(emptyList()) }
+    var lernZurueck by remember { mutableStateOf(VokabelTabScreen.HOME) }
     var showMergeDialog by remember { mutableStateOf(false) }
     var extractionJob by remember { mutableStateOf<Job?>(null) }
     var comingFromScan by remember { mutableStateOf(false) }
@@ -214,14 +295,30 @@ fun VocabTab(paddingValues: PaddingValues) {
     val keineVokabelnErkannt = stringResource(R.string.keine_vokabeln_erkannt)
     val fehlerMsgPattern = stringResource(R.string.fehler_msg)
 
+    fun starteLernen(
+        set: VokabelSet?,
+        karten: List<LernKarte>,
+        name: String? = set?.name,
+        zurueck: VokabelTabScreen = VokabelTabScreen.HOME
+    ) {
+        activeSet = set
+        cachedSetName = name
+        lernKarten = karten
+        lernZurueck = zurueck
+        screen = VokabelTabScreen.LEARN
+    }
+
     fun openSetAndUpdateLastUsed(set: VokabelSet) {
         val updatedSet = set.copy(lastUsed = System.currentTimeMillis())
         savedSets = saveVokabelSet(prefs, updatedSet)
-        activeSet = updatedSet
-        cachedSetName = set.name
-        vokabeln = updatedSet.vokabeln
-        screen = VokabelTabScreen.LEARN
+        starteLernen(
+            set = updatedSet,
+            karten = updatedSet.vokabeln.map { LernKarte(it, updatedSet.createdAt, false) }
+        )
     }
+
+    val eigeneSetId: Long? = lernKarten.map { it.setId }.distinct().singleOrNull()
+    val schreibbar = eigeneSetId != null && eigeneSetId == activeSet?.createdAt
 
     LaunchedEffect(rawRecentMaterials) {
         val parsed = rawRecentMaterials.mapNotNull(::parseRecentMaterial)
@@ -267,9 +364,11 @@ fun VocabTab(paddingValues: PaddingValues) {
             onDismiss = { showMergeDialog = false },
             onMergeComplete = { mergedSet ->
                 savedSets = saveVokabelSet(prefs, mergedSet)
-                activeSet = mergedSet
                 vokabeln = mergedSet.vokabeln
-                screen = VokabelTabScreen.LEARN
+                starteLernen(
+                    set = mergedSet,
+                    karten = mergedSet.vokabeln.map { LernKarte(it, mergedSet.createdAt, false) }
+                )
                 showMergeDialog = false
             }
         )
@@ -282,6 +381,8 @@ fun VocabTab(paddingValues: PaddingValues) {
                 bitmap = uriToBitmap(context, it)
                 vokabeln = emptyList()
                 usedEngine = null
+                activeSet = null
+                cachedSetName = null
                 screen = VokabelTabScreen.UPLOAD
             }
         }
@@ -291,23 +392,18 @@ fun VocabTab(paddingValues: PaddingValues) {
             initial = saveNameInput,
             onConfirm = { name ->
                 scope.launch {
-                    val set = VokabelSet(name.trim(), vokabeln)
+                    val alterBestand = activeSet
+                    val set = VokabelSet(
+                        name = name.trim(),
+                        vokabeln = vokabeln,
+                        createdAt = alterBestand?.createdAt ?: System.currentTimeMillis()
+                    )
                     savedSets = saveVokabelSet(prefs, set)
                     cachedSetName = name.trim()
                     showSaveDialog = false
                     saveNameInput = ""
                     comingFromScan = false
-                    activeSet?.let { oldSet ->
-                        val oldId = oldSet.createdAt.toInt()
-                        val newId = set.createdAt.toInt()
-                        val weakVokabeln = loadWeakVokabeln(prefs, oldSet.createdAt)
-                        saveWeakVokabeln(prefs, set.createdAt, weakVokabeln)
-                        lastWidths =
-                            lastWidths.map { if (it.id == oldId) it.copy(id = newId) else it }
-                        currentWidths =
-                            currentWidths.map { if (it.id == oldId) it.copy(id = newId) else it }
-                        deleteVokabelSet(prefs, oldSet)
-                    }
+                    activeSet = set
                     screen = VokabelTabScreen.HOME
                 }
             },
@@ -322,11 +418,29 @@ fun VocabTab(paddingValues: PaddingValues) {
         when (current) {
             VokabelTabScreen.DASHBOARD -> SchoolDashboard(
                 savedSets = savedSets,
+                faelligGesamt = savedSets.sumOf { faelligeVokabeln(it, prefs).size },
                 onVocabClick = { screen = VokabelTabScreen.HOME },
+                onDueClick = {
+                    val jetzt = System.currentTimeMillis()
+                    val faellig = savedSets.flatMap { s ->
+                        faelligeVokabeln(s, prefs, jetzt).map { LernKarte(it, s.createdAt, false) }
+                    }
+                    if (faellig.isNotEmpty()) {
+                        starteLernen(
+                            set = null,
+                            karten = faellig.shuffled(),
+                            name = null,
+                            zurueck = VokabelTabScreen.DASHBOARD
+                        )
+                    }
+                },
                 onMaterialClick = {
                     selectedMaterialSubject = null
                     selectedMaterialFile = null
                     screen = VokabelTabScreen.MATERIALIEN
+                },
+                onNotenClick = {
+                    screen = VokabelTabScreen.NOTEN
                 },
                 onOpenSet = { set -> openSetAndUpdateLastUsed(set) },
                 paddingValues = paddingValues,
@@ -343,39 +457,32 @@ fun VocabTab(paddingValues: PaddingValues) {
                 prefs = prefs,
                 onNewSet = {
                     usedEngine = null
+                    activeSet = null
+                    cachedSetName = null
                     screen = VokabelTabScreen.UPLOAD
                 },
                 onOpenSet = { set -> openSetAndUpdateLastUsed(set) },
                 onLearnWeak = { set ->
-                    openSetAndUpdateLastUsed(
-                        set.copy(
-                            vokabeln = loadWeakVokabeln(
-                                prefs,
-                                set.createdAt
-                            )
-                        )
-                    )
+                    val schwach = loadWeakVokabeln(prefs, set.createdAt)
+                    val lernKarteListe = schwach.map { LernKarte(it, set.createdAt, false) }
+                    if (lernKarteListe.isEmpty()) openSetAndUpdateLastUsed(set)
+                    else starteLernen(set = set, karten = lernKarteListe)
                 },
                 onLearnWithMix = { set ->
-                    val otherVokabeln = savedSets
+                    val eigene = set.vokabeln.map { LernKarte(it, set.createdAt, false) }
+                    val fremde = savedSets
                         .filter { it.createdAt != set.createdAt }
-                        .flatMap { it.vokabeln }
+                        .flatMap { s -> s.vokabeln.map { LernKarte(it, s.createdAt, false) } }
                         .shuffled()
-                    val mixCount = (5..10).random().coerceAtMost(otherVokabeln.size)
-                    val mixed = (set.vokabeln + otherVokabeln.take(mixCount)).shuffled()
-                    val reindexed = mixed.mapIndexed { i, v -> v.copy(id = i) }
-                    activeSet = set
-                    vokabeln = reindexed
-                    screen = VokabelTabScreen.LEARN
+                    val mixAnzahl = (5..10).random().coerceAtMost(fremde.size)
+                    starteLernen(
+                        set = set,
+                        karten = (eigene + fremde.take(mixAnzahl)).shuffled()
+                    )
                 },
                 onDeleteSet = { set ->
-                    saveWeakVokabeln(prefs, set.createdAt, emptyList())
                     savedSets = deleteVokabelSet(prefs, set)
                 },
-                onUpdate = { id, value ->
-                    currentWidths = currentWidths.filter { it.id != id } + WidthState(id, value)
-                },
-                lastWidths = lastWidths,
                 onMergeClick = { showMergeDialog = true },
                 onBack = { screen = VokabelTabScreen.DASHBOARD },
                 paddingValues = paddingValues,
@@ -467,7 +574,11 @@ fun VocabTab(paddingValues: PaddingValues) {
                 isExtracting = isExtracting,
                 fromScan = comingFromScan,
                 onVokabelnChanged = { vokabeln = it },
-                onStartLearning = { screen = VokabelTabScreen.LEARN },
+                onStartLearning = {
+                    lernKarten = vokabeln.map { LernKarte(it, 0L, false) }
+                    lernZurueck = VokabelTabScreen.REVIEW
+                    screen = VokabelTabScreen.LEARN
+                },
                 onSave = { saveNameInput = activeSet?.name ?: ""; showSaveDialog = true },
                 onBack = {
                     screen =
@@ -485,24 +596,27 @@ fun VocabTab(paddingValues: PaddingValues) {
             )
 
             VokabelTabScreen.LEARN -> LearnScreen(
-                vokabeln = vokabeln,
+                karten = lernKarten,
                 prefs = prefs,
-                setCreatedAt = activeSet?.createdAt ?: 0L,
+                sessionKey = eigeneSetId ?: 0L,
                 onBack = {
-                    lastWidths = currentWidths
-                    screen =
-                        if (activeSet != null) VokabelTabScreen.HOME else VokabelTabScreen.REVIEW
+                    screen = lernZurueck
                     activeSet = null
                 },
                 setName = activeSet?.name ?: cachedSetName,
                 onVokabelnUpdated = { updatedVokabeln ->
-                    vokabeln = updatedVokabeln
-                    activeSet = activeSet?.copy(vokabeln = updatedVokabeln)
-                    savedSets = saveVokabelSet(prefs, activeSet!!)
+                    if (schreibbar) {
+                        vokabeln = updatedVokabeln
+                        val updatedSet = activeSet?.copy(vokabeln = updatedVokabeln)
+                        activeSet = updatedSet
+                        if (updatedSet != null) savedSets = saveVokabelSet(prefs, updatedSet)
+                    }
                 },
                 onRenameRequest = {
-                    saveNameInput = activeSet?.name ?: " "
-                    showSaveDialog = true
+                    if (activeSet != null) {
+                        saveNameInput = activeSet?.name ?: " "
+                        showSaveDialog = true
+                    }
                 },
                 paddingValues = paddingValues
             )
@@ -518,6 +632,13 @@ fun VocabTab(paddingValues: PaddingValues) {
                 initialSubject = selectedMaterialSubject,
                 initialFile = selectedMaterialFile
             )
+
+            VokabelTabScreen.NOTEN -> NotenScreen(
+                onBack = {
+                    screen = VokabelTabScreen.DASHBOARD
+                },
+                paddingValues = paddingValues
+            )
         }
     }
 }
@@ -526,11 +647,14 @@ fun VocabTab(paddingValues: PaddingValues) {
 fun SchoolDashboard(
     savedSets: List<VokabelSet>,
     onVocabClick: () -> Unit,
+    onDueClick: () -> Unit,
     onMaterialClick: () -> Unit,
+    onNotenClick: () -> Unit,
     onOpenSet: (VokabelSet) -> Unit,
     paddingValues: PaddingValues,
     recentMaterials: List<RecentMaterial> = emptyList(),
-    onOpenMaterial: (RecentMaterial) -> Unit = {}
+    onOpenMaterial: (RecentMaterial) -> Unit = {},
+    faelligGesamt: Int = 0
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         SchoolHeader(
@@ -602,35 +726,63 @@ fun SchoolDashboard(
                     }
                 }
             }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(BgSurface)
-                .clickable { }
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            contentAlignment = Alignment.CenterStart
-        ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("🤖", fontSize = 22.sp)
-                Column {
+              if (prvt()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onNotenClick() }
+                        .padding(horizontal = 10.dp, vertical = 18.dp)
+                        .weight(1f)
+                ) {
+                    Text("📊", fontSize = 18.sp)
                     Text(
-                        stringResource(R.string.ai_chat),
+                        stringResource(R.string.noten),
                         color = TextPrimary,
-                        fontSize = 15.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Text(
-                        stringResource(R.string.unterstutzung_beim_lernen),
-                        color = TextTertiary,
-                        fontSize = 12.sp
-                    )
+                }
+            }}
+        }
+
+        if (savedSets.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (faelligGesamt > 0) MaterialTheme.colorScheme.primary else BgSurface)
+                    .clickable(enabled = faelligGesamt > 0) { onDueClick() }
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("📅", fontSize = 22.sp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.heute_due),
+                            color = if (faelligGesamt > 0) TextPrimary else TextSecondary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            if (faelligGesamt > 0) pluralStringResource(
+                                R.plurals.faellige_vokabeln, faelligGesamt, faelligGesamt
+                            ) else stringResource(R.string.alles_gelernt),
+                            color = TextTertiary,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
@@ -646,8 +798,6 @@ fun VocabTabContent(
     onLearnWeak: (VokabelSet) -> Unit,
     onLearnWithMix: (VokabelSet) -> Unit,
     onDeleteSet: (VokabelSet) -> Unit,
-    onUpdate: (Int, Int) -> Unit,
-    lastWidths: List<WidthState>,
     onMergeClick: () -> Unit = {},
     onBack: () -> Unit,
     paddingValues: PaddingValues,
@@ -751,31 +901,19 @@ fun VocabTabContent(
                 ) {
                     items(sortedSets, key = { it.createdAt }) { set ->
                         val session = remember { loadSessionState(prefs, set.createdAt) }
-                        val progressFloat by remember(session) {
-                            mutableFloatStateOf(
-                                if (session != null && set.vokabeln.isNotEmpty())
-                                    session.currentIndex.toFloat() / set.vokabeln.size
-                                else 0f
-                            )
+                        val schwachListe = remember { loadWeakVokabeln(prefs, set.createdAt) }
+                        val setFortschritt = remember { loadSetProgress(prefs, set.createdAt) }
+                        val sitzt = set.vokabeln.count {
+                            (setFortschritt.vokabelProgress[it.id]?.streak ?: 0) >= SITZT_STREAK
                         }
-
-                        val setId = set.createdAt.toInt()
-                        val lastWidth = remember {
-                            lastWidths.firstOrNull { it.id == setId }?.value?.toFloat() ?: 0f
+                        val faellig = set.vokabeln.count {
+                            istFaellig(setFortschritt.vokabelProgress[it.id])
                         }
-
-                        val progressPercentFloat = remember { Animatable(lastWidth) }
-                        LaunchedEffect(progressFloat) {
-                            delay(200.milliseconds)
-                            progressPercentFloat.animateTo(
-                                progressFloat,
-                                animationSpec = tween(400, easing = EaseInOutCubic)
-                            )
-                            if (progressPercentFloat.value != 0f) onUpdate(
-                                setId,
-                                progressPercentFloat.value.toInt()
-                            )
-                        }
+                        val masteryQuote by animateFloatAsState(
+                            targetValue = if (set.vokabeln.isEmpty()) 0f
+                            else sitzt.toFloat() / set.vokabeln.size,
+                            label = "mastery_$set"
+                        )
 
                         Row(
                             modifier = Modifier
@@ -815,8 +953,42 @@ fun VocabTabContent(
                                             fontSize = 20.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                stringResource(
+                                                    R.string.sitzende_vokabeln, sitzt, set.vokabeln.size
+                                                ),
+                                                color = TextTertiary,
+                                                fontSize = 11.sp
+                                            )
+                                            if (faellig > 0) {
+                                                Text(
+                                                    stringResource(
+                                                        R.string.faellig_kurz, faellig
+                                                    ),
+                                                    color = AccentViolet,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            } else if (setFortschritt.totalSessions > 0) {
+                                                Text(
+                                                    stringResource(
+                                                        R.string.letzte_sitzung,
+                                                        SimpleDateFormat(
+                                                            "dd.MM.",
+                                                            LocalLocale.current.platformLocale
+                                                        ).format(Date(setFortschritt.lastSession))
+                                                    ),
+                                                    color = TextTertiary,
+                                                    fontSize = 11.sp
+                                                )
+                                            }
+                                        }
                                     }
-                                    val weakCount = loadWeakVokabeln(prefs, set.createdAt).size
+                                    val weakCount = schwachListe.size
                                     if (weakCount > 0) {
                                         Box(
                                             modifier = Modifier
@@ -867,18 +1039,34 @@ fun VocabTabContent(
                                             containerColor = BgCard,
                                             modifier = Modifier.alpha(alpha)
                                         ) {
+                                            if (weakCount > 0) {
                                             DropdownMenuItem(
                                                 text = {
                                                     Text(
-                                                        stringResource(R.string.mix_modus),
-                                                        color = TextPrimary,
+                                                        stringResource(
+                                                            R.string.nur_schwache, weakCount
+                                                        ),
+                                                        color = Color(0xFFEF5350),
                                                         fontSize = 14.sp
                                                     )
                                                 },
                                                 onClick = {
-                                                    menuOpenFor = null; onLearnWithMix(set)
+                                                    menuOpenFor = null; onLearnWeak(set)
                                                 }
                                             )
+                                        }
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    stringResource(R.string.mix_modus),
+                                                    color = TextPrimary,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            onClick = {
+                                                menuOpenFor = null; onLearnWithMix(set)
+                                            }
+                                        )
                                             DropdownMenuItem(
                                                 text = {
                                                     Text(
@@ -912,10 +1100,10 @@ fun VocabTabContent(
                                                 )
                                             )
                                     ) {
-                                        if (progressPercentFloat.value > 0f) {
+                                        if (masteryQuote > 0f) {
                                             Box(
                                                 modifier = Modifier
-                                                    .fillMaxWidth(progressPercentFloat.value)
+                                                    .fillMaxWidth(masteryQuote)
                                                     .fillMaxHeight()
                                                     .clip(RoundedCornerShape(4.dp))
                                                     .background(
@@ -932,9 +1120,7 @@ fun VocabTabContent(
 
                                     Spacer(Modifier.width(10.dp))
 
-                                    val hasSession =
-                                        remember { loadSessionState(prefs, set.createdAt) != null }
-                                    if (hasSession) {
+                                    if (session != null) {
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(8.dp))
@@ -943,12 +1129,7 @@ fun VocabTabContent(
                                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                                         ) {
                                             Text(
-                                                "▶ ${
-                                                    loadSessionState(
-                                                        prefs,
-                                                        set.createdAt
-                                                    )?.currentIndex ?: 0
-                                                }/${set.vokabeln.size}",
+                                                "▶ ${session.currentIndex}/${set.vokabeln.size}",
                                                 color = AccentViolet,
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold
@@ -1225,12 +1406,6 @@ fun ReviewScreen(
         var changeCount = 0
         if (isExtracting || fromScan) return 0
 
-        original.forEach { origVokabel ->
-            if (current.none { it.id == origVokabel.id }) {
-                changeCount++
-            }
-        }
-
         current.forEach { currVokabel ->
             val origVokabel = original.firstOrNull { it.id == currVokabel.id }
             if (origVokabel != null) {
@@ -1250,6 +1425,22 @@ fun ReviewScreen(
         else calculateChanges(initVocabs, currentVokabeln)
 
     var showCancelDialog by remember { mutableStateOf(false) }
+    var vokabelToDelete by remember { mutableStateOf<Vokabel?>(null) }
+    var editingId by remember { mutableStateOf<Int?>(null) }
+
+    if (vokabelToDelete != null) {
+        AlertDialogTabslify(
+            title = stringResource(R.string.vokabel_loeschen),
+            text = stringResource(R.string.wird_geloscht, vokabelToDelete!!.latein),
+            onConfirm = {
+                val rest = currentVokabeln.filter { it.id != vokabelToDelete!!.id }
+                currentVokabeln = rest
+                vokabelToDelete = null
+                onVokabelnChanged(rest)
+            },
+            onDismiss = { vokabelToDelete = null }
+        )
+    }
 
     if (showCancelDialog) {
         AlertDialog(
@@ -1391,12 +1582,12 @@ fun ReviewScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
                     items(currentVokabeln, key = { it.id }) { vokabel ->
-                var editMode by remember { mutableStateOf(false) }
+                val editMode = editingId == vokabel.id
                 var editLatein by remember(vokabel.latein) { mutableStateOf(vokabel.latein) }
                 var editDeutsch by remember(vokabel.deutsch) { mutableStateOf(vokabel.deutsch) }
 
                 BackHandler(editMode) {
-                    editMode = false
+                    editingId = null
                 }
 
                 Column(
@@ -1404,7 +1595,9 @@ fun ReviewScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .background(BgSurface)
-                        .clickable { editMode = !editMode }
+                        .clickable(enabled = !isExtracting) {
+                            editingId = if (editingId == vokabel.id) null else vokabel.id
+                        }
                 ) {
                     if (editMode) {
                         Column(
@@ -1432,11 +1625,7 @@ fun ReviewScreen(
                                         .weight(1f)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(Color(0xFFB71C1C).copy(alpha = 0.15f))
-                                        .clickable {
-                                            currentVokabeln =
-                                                currentVokabeln.filter { it.id != vokabel.id }
-                                            editMode = false
-                                        }
+                                        .clickable(enabled = !isExtracting) { vokabelToDelete = vokabel }
                                         .padding(vertical = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) { Text(stringResource(R.string.loschen), color = Color(0xFFEF9A9A), fontSize = 13.sp) }
@@ -1458,7 +1647,7 @@ fun ReviewScreen(
                                                         )
                                                     }
                                             }
-                                            editMode = false
+                                            editingId = null
                                         }
                                         .padding(vertical = 10.dp),
                                     contentAlignment = Alignment.Center
@@ -1509,71 +1698,223 @@ fun ReviewScreen(
 @SuppressLint("UnusedContentLambdaTargetStateParameter")
 @Composable
 fun LearnScreen(
-    vokabeln: List<Vokabel>,
+    karten: List<LernKarte>,
     prefs: SharedPreferences,
-    setCreatedAt: Long,
+    sessionKey: Long,
     onBack: () -> Unit,
     setName: String?,
     onVokabelnUpdated: ((List<Vokabel>) -> Unit)? = null,
     onRenameRequest: () -> Unit = {},
     paddingValues: PaddingValues
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var setToReview by remember { mutableStateOf(false) }
-    var vokabeln by remember { mutableStateOf(vokabeln) }
-    val savedSession = remember { loadSessionState(prefs, setCreatedAt) }
-    val allVokabeln = vokabeln
-    var shuffled by remember {
+    var pendingShuffle by remember { mutableStateOf<Boolean?>(null) }
+    var shuffleOrder by remember { mutableStateOf(prefs.getBoolean(SHUFFLE_KEY, true)) }
+    var basis by remember { mutableStateOf(karten) }
+    val savedSession = remember { if (sessionKey > 0L) loadSessionState(prefs, sessionKey) else null }
+
+    var queue by remember {
         mutableStateOf(
-            savedSession?.shuffledIds?.mapNotNull { id -> allVokabeln.firstOrNull { it.id == id } }
-                ?: vokabeln.shuffled()
+            savedSession?.cards
+                ?.mapNotNull { verweis ->
+                    karten.firstOrNull {
+                        it.setId == verweis.setId && it.vokabel.id == verweis.id
+                    }?.copy(richtung = verweis.richtung)
+                }
+                ?.takeIf { it.size >= 3 }
+                ?: ordneKarten(karten, shuffleOrder)
         )
     }
-    var currentIndex by remember { mutableIntStateOf(savedSession?.currentIndex ?: 0) }
-    var showDeutsch by remember { mutableStateOf(savedSession?.showDeutsch ?: false) }
-    var showAnswer by remember { mutableStateOf(false) }
-    var correctVokabeln by remember {
-        mutableStateOf(
-            (savedSession?.correctIds ?: emptyList()).mapNotNull { id ->
-                allVokabeln.firstOrNull { it.id == id }
-            }
-        )
-    }
-    var wrongVokabeln by remember {
-        mutableStateOf(
-            (savedSession?.wrongIds ?: emptyList()).mapNotNull { id ->
-                allVokabeln.firstOrNull { it.id == id }
-            }
-        )
-    }
-    var correct by remember { mutableIntStateOf(savedSession?.correctIds?.size ?: 0) }
-    var wrong by remember { mutableIntStateOf(savedSession?.wrongIds?.size ?: 0) }
+    var index by remember { mutableIntStateOf(savedSession?.currentIndex ?: 0) }
+    var richtung by remember { mutableStateOf(savedSession?.richtung ?: false) }
+    var modus by remember { mutableStateOf(ladeLernModus(prefs)) }
+    var ergebnisse by remember { mutableStateOf(emptyList<LernErgebnis>()) }
+    var falscheKarten by remember { mutableStateOf(savedSession?.falscheKarten ?: emptyList()) }
+    var flushMarke by remember { mutableIntStateOf(0) }
+    var startZeit by remember { mutableStateOf(System.currentTimeMillis()) }
+    var endeZeit by remember { mutableStateOf(0L) }
+    var aufgedeckt by remember { mutableStateOf(false) }
+    var feedback by remember { mutableStateOf<AntwortFeedback?>(null) }
+    var tipEingabe by remember { mutableStateOf("") }
+    var hinweise by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var hinweisLaden by remember { mutableStateOf(false) }
+    val wiederholungen = remember { mutableMapOf<String, Int>() }
+
+    val karte = queue.getOrNull(index)
+    val erledigt = index >= queue.size
+    val richtigAnzahl = ergebnisse.count { it.richtig }
+    val falschAnzahl = ergebnisse.size - richtigAnzahl
+
     val flipped by animateFloatAsState(
-        targetValue = if (showAnswer) 180f else 0f,
+        targetValue = if (modus == LernModus.AUFECKEN && aufgedeckt) 180f else 0f,
         animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
         label = "flip"
     )
-    val done = currentIndex >= shuffled.size
-    LaunchedEffect(vokabeln) {
-        shuffled = vokabeln.shuffled()
-        showAnswer = showDeutsch
+
+    val optionen = remember(karte, queue, karten) {
+        val aktuell = karte ?: return@remember emptyList()
+        val korrekt = aktuell.antwort
+        val pool = queue.map { it.vokabel } + karten.map { it.vokabel }
+        val distraktoren = pool
+            .map { if (aktuell.richtung) it.latein else it.deutsch }
+            .filter { it.isNotBlank() && it != korrekt }
+            .distinct()
+            .shuffled()
+            .take(3)
+        (distraktoren + korrekt).shuffled()
+    }
+
+    fun flushNeu() {
+        if (ergebnisse.size > flushMarke) {
+            uebernehmeErgebnisse(prefs, ergebnisse.drop(flushMarke))
+            flushMarke = ergebnisse.size
+        }
+    }
+
+    fun speichereSitzung() {
+        if (sessionKey <= 0L) return
+        saveSessionState(
+            prefs, sessionKey,
+            SessionState(
+                cards = queue.map { KartenVerweis(it.setId, it.vokabel.id, it.richtung) },
+                currentIndex = index,
+                richtig = richtigAnzahl,
+                falsch = falschAnzahl,
+                falscheKarten = falscheKarten,
+                richtung = richtung,
+                timestamp = System.currentTimeMillis()
+            )
+        )
+    }
+
+    fun beantworte(aktuelle: LernKarte, richtig: Boolean) {
+        ergebnisse = ergebnisse + LernErgebnis(
+            aktuelle.setId, aktuelle.vokabel, richtig, aktuelle.richtung
+        )
+        val schonGelistet = falscheKarten.any {
+            it.setId == aktuelle.setId && it.vokabel.id == aktuelle.vokabel.id
+        }
+        falscheKarten = when {
+            richtig -> falscheKarten.filterNot {
+                it.setId == aktuelle.setId && it.vokabel.id == aktuelle.vokabel.id
+            }
+            schonGelistet -> falscheKarten
+            else -> falscheKarten + aktuelle
+        }
+        if (!richtig) {
+            val versuch = (wiederholungen[aktuelle.verweis] ?: 0) + 1
+            wiederholungen[aktuelle.verweis] = versuch
+            val offen = queue.size - index - 1
+            if (versuch <= 2 && offen >= 3) {
+                queue = queue.toMutableList().also {
+                    it.add(index + 4, aktuelle.copy(richtung = !aktuelle.richtung))
+                }
+            }
+        }
+        index++
+        aufgedeckt = false
+        tipEingabe = ""
+    }
+
+    fun waehleOption(optionIndex: Int) {
+        val aktuell = karte ?: return
+        val gewaehlt = optionen.getOrNull(optionIndex) ?: return
+        feedback = AntwortFeedback(aktuell, gewaehlt, gewaehlt == aktuell.antwort)
+        beantworte(aktuell, gewaehlt == aktuell.antwort)
+    }
+
+    fun pruefeEingabe() {
+        val aktuell = karte ?: return
+        if (tipEingabe.isBlank()) return
+        val korrekt = vergleicheAntwort(tipEingabe, aktuell.antwort)
+        feedback = AntwortFeedback(aktuell, tipEingabe.trim(), korrekt)
+        beantworte(aktuell, korrekt)
+    }
+
+    fun weiter() {
+        feedback = null
+        aufgedeckt = false
+        tipEingabe = ""
+    }
+
+    fun setzeRichtung(neu: Boolean) {
+        richtung = neu
+        queue = queue.mapIndexed { i, c -> if (i >= index) c.copy(richtung = neu) else c }
+        aufgedeckt = false
+        feedback = null
+        tipEingabe = ""
+    }
+
+    fun setzeModus(neu: LernModus) {
+        modus = neu
+        speichereLernModus(prefs, neu)
+        tipEingabe = ""
+    }
+
+    fun holeHinweis(aktuelle: LernKarte) {
+        val verweis = aktuelle.verweis
+        ladeHinweis(prefs, verweis)?.let {
+            hinweise = hinweise + (verweis to it)
+            return
+        }
+        if (hinweisLaden) return
+        hinweisLaden = true
+        scope.launch {
+            val text = try {
+                sendAiRequest(
+                    context = context,
+                    userMessage = "Vokabel: ${aktuelle.vokabel.latein} bedeutet " +
+                        "${aktuelle.vokabel.deutsch}. Antworte auf Deutsch in höchstens 30 Wörtern: " +
+                        "ein kurzer Beispielsatz mit der Vokabel und eine grammatische Kurzangabe " +
+                        "zu Genus und Form, falls erkennbar. Keine Anrede, nur die Angaben.",
+                    target = AiTarget.VocabHint,
+                    serviceKey = "vocab"
+                )?.trim().orEmpty()
+            } catch (_: Exception) {
+                ""
+            }
+            hinweisLaden = false
+            if (text.isNotEmpty()) {
+                hinweise = hinweise + (verweis to text)
+                speichereHinweis(prefs, verweis, text)
+            }
+        }
     }
 
     val handleBack = {
-        if (done) clearSessionState(prefs, setCreatedAt)
-        if (!done) {
-            saveSessionState(
-                prefs, setCreatedAt,
-                SessionState(
-                    shuffledIds = shuffled.map { it.id },
-                    currentIndex = currentIndex,
-                    correctIds = correctVokabeln.map { it.id },
-                    wrongIds = wrongVokabeln.map { it.id },
-                    showDeutsch = showDeutsch,
-                    timestamp = System.currentTimeMillis()
-                )
-            )
-        }
+        flushNeu()
+        if (erledigt) clearSessionState(prefs, sessionKey) else speichereSitzung()
         onBack()
+    }
+
+    val applyShuffleOrder = { value: Boolean ->
+        shuffleOrder = value
+        pendingShuffle = null
+        prefs.edit { putBoolean(SHUFFLE_KEY, value) }
+        clearSessionState(prefs, sessionKey)
+        queue = ordneKarten(basis, value)
+        index = 0
+        ergebnisse = emptyList()
+        falscheKarten = emptyList()
+        flushMarke = 0
+        aufgedeckt = false
+        feedback = null
+        startZeit = System.currentTimeMillis()
+    }
+
+    val toggleShuffleOrder = {
+        val value = !shuffleOrder
+        if (!erledigt && index > 0) pendingShuffle = value else applyShuffleOrder(value)
+    }
+
+    LaunchedEffect(feedback) {
+        val stand = feedback ?: return@LaunchedEffect
+        if (stand.korrekt) {
+            delay(1100)
+            feedback = null
+        }
     }
 
     BackHandler {
@@ -1594,21 +1935,23 @@ fun LearnScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
             }
             Text(
-                "$setName ",
+                setName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.alle_faellig),
                 color = TextPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(BgSurface)
-                    .clickable { showDeutsch = !showDeutsch; showAnswer = false }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .clickable { setzeRichtung(!richtung) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 Text(
-                    if (showDeutsch) stringResource(R.string.de_la) else stringResource(R.string.la_de),
+                    if (richtung) stringResource(R.string.de_la) else stringResource(R.string.la_de),
                     color = AccentViolet,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
@@ -1618,8 +1961,47 @@ fun LearnScreen(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(BgSurface)
+                    .clickable {
+                        setzeModus(
+                            when (modus) {
+                                LernModus.AUSWAHL -> LernModus.TIPPEN
+                                LernModus.TIPPEN -> LernModus.AUFECKEN
+                                LernModus.AUFECKEN -> LernModus.AUSWAHL
+                            }
+                        )
+                    }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    when (modus) {
+                        LernModus.AUSWAHL -> stringResource(R.string.modus_auswahl)
+                        LernModus.TIPPEN -> stringResource(R.string.modus_tippen)
+                        LernModus.AUFECKEN -> stringResource(R.string.modus_aufdecken)
+                    },
+                    color = AccentViolet,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (shuffleOrder) AccentViolet.copy(alpha = 0.15f) else BgSurface)
+                    .clickable { toggleShuffleOrder() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    Icons.Default.Shuffle,
+                    stringResource(R.string.zufaellige_reihenfolge),
+                    tint = if (shuffleOrder) AccentViolet else TextTertiary
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(BgSurface)
                     .clickable { setToReview = true }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 Icon(
                     Icons.Default.Edit,
@@ -1629,17 +2011,17 @@ fun LearnScreen(
             }
         }
 
-        if (!done) {
+        if (karte != null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(3.dp)
                     .background(Transparent)
             ) {
-                if (currentIndex > 0) {
+                if (index > 0) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(currentIndex.toFloat() / shuffled.size)
+                            .fillMaxWidth(index.toFloat() / queue.size)
                             .fillMaxHeight()
                             .background(MaterialTheme.colorScheme.primary)
                             .clip(RoundedCornerShape(2.dp))
@@ -1647,194 +2029,355 @@ fun LearnScreen(
                 }
             }
             Text(
-                "${currentIndex + 1}/${shuffled.size}  ✓ $correct  ✗ $wrong",
+                "${if (feedback != null) index else index + 1}/${queue.size}  ✓ $richtigAnzahl  ✗ $falschAnzahl",
                 color = TextTertiary, fontSize = 12.sp,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .padding(top = 4.dp)
             )
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
 
-            val vokabel = shuffled[currentIndex]
-            val frontText = if (showDeutsch) vokabel.deutsch else vokabel.latein
-            val backText = if (showDeutsch) vokabel.latein else vokabel.deutsch
+            val stand = feedback
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 20.dp, vertical = 80.dp)
-                    .graphicsLayer { rotationY = flipped; cameraDistance = 12f * density },
-                contentAlignment = Alignment.Center
-            ) {
-                if (flipped <= 90f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f)
-                            .fillMaxHeight(0.6f)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable { showAnswer = !showAnswer }
-                            .padding(vertical = 40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                frontText,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                color = TextPrimary,
-                                modifier = Modifier.padding(horizontal = 24.dp)
-                            )
-                            if (currentIndex == 0) {
-                                Spacer(Modifier.height(20.dp))
+            if (modus == LernModus.AUFECKEN && stand == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 20.dp, vertical = 40.dp)
+                        .graphicsLayer { rotationY = flipped; cameraDistance = 12f * density },
+                    contentAlignment = Alignment.Center
+                ) {
+                    val vorderseite = karte.frage
+                    val rueckseite = karte.antwort
+                    if (flipped <= 90f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .fillMaxHeight(0.6f)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { aufgedeckt = true }
+                                .padding(vertical = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    stringResource(R.string.tippe_zum_aufdecken),
-                                    color = TextPrimary.copy(0.4f),
-                                    fontSize = 12.sp
+                                    vorderseite,
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    color = TextPrimary,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
+                                )
+                                if (index == 0) {
+                                    Spacer(Modifier.height(20.dp))
+                                    Text(
+                                        stringResource(R.string.tippe_zum_aufdecken),
+                                        color = TextPrimary.copy(0.4f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.9f)
+                                .fillMaxHeight(0.6f)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { aufgedeckt = false }
+                                .graphicsLayer { rotationY = 180f },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    rueckseite,
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    color = TextPrimary,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
+                                )
+                                HinweisBereich(
+                                    text = hinweise[karte.verweis],
+                                    laedt = hinweisLaden,
+                                    onLaden = { holeHinweis(karte) }
                                 )
                             }
                         }
                     }
-                } else {
-                    Box(
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                AnimatedContent(
+                    targetState = aufgedeckt,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "btns",
+                    modifier = Modifier.padding(bottom = 50.dp)
+                ) {
+                    Row(
                         modifier = Modifier
-                            .fillMaxWidth(0.9f)
-                            .fillMaxHeight(0.6f)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable { showAnswer = !showAnswer }
-                            .graphicsLayer { rotationY = 180f },
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                backText,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                color = TextPrimary,
-                                modifier = Modifier.padding(horizontal = 24.dp)
-                            )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
+                                .clickable { beantworte(karte, false) }
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    "✗",
+                                    color = Color(0xFFEF5350),
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    stringResource(R.string.falsch),
+                                    color = Color(0xFFEF5350),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { beantworte(karte, true) }
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    "✓",
+                                    color = TextPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    stringResource(R.string.richtig),
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }
-            }
-
-            Spacer(Modifier.height(32.dp))
-
-            AnimatedContent(
-                targetState = showAnswer,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "btns",
-                modifier = Modifier.padding(bottom = 50.dp)
-            ) {
-                Row(
+            } else {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .weight(1f)
+                        .padding(horizontal = 20.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFFB71C1C).copy(alpha = 0.2f))
-                            .clickable {
-                                wrong++
-                                wrongVokabeln = wrongVokabeln + shuffled[currentIndex]
-                                currentIndex++
-                                showAnswer = false
-                            }
-                            .padding(vertical = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                "✗",
-                                color = Color(0xFFEF5350),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                stringResource(R.string.falsch),
-                                color = Color(0xFFEF5350),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
                             .background(MaterialTheme.colorScheme.primary)
-                            .clickable {
-                                correct++
-                                correctVokabeln = correctVokabeln + shuffled[currentIndex]
-                                currentIndex++
-                                showAnswer = false
-                            }
-                            .padding(vertical = 16.dp),
+                            .padding(vertical = 26.dp, horizontal = 18.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        Text(
+                            stand?.karte?.frage ?: karte.frage,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = TextPrimary
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    if (modus == LernModus.TIPPEN && stand == null) {
+                        OutlinedTextField(
+                            value = tipEingabe,
+                            onValueChange = { tipEingabe = it },
+                            label = { Text(stringResource(R.string.tipp_eingabe)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                autoCorrectEnabled = false,
+                                keyboardType = KeyboardType.Text,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { pruefeEingabe() }),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable(enabled = tipEingabe.isNotBlank()) { pruefeEingabe() }
+                                .padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "✓",
-                                color = TextPrimary,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                stringResource(R.string.richtig),
+                                stringResource(R.string.pruefen),
                                 color = TextPrimary,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
+                    } else if (stand == null) {
+                        optionen.forEachIndexed { optionIndex, optionText ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(BgSurface)
+                                    .clickable { waehleOption(optionIndex) }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                            ) {
+                                Text(
+                                    optionText,
+                                    color = TextPrimary,
+                                    fontSize = 15.sp
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
                     }
+                    if (stand != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (stand.korrekt) Color(0xFF2E7D32).copy(alpha = 0.45f)
+                                    else Color(0xFFB71C1C).copy(alpha = 0.35f)
+                                )
+                                .padding(14.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    if (stand.korrekt) stringResource(R.string.richtig)
+                                    else stringResource(R.string.richtig_waere, stand.karte.antwort),
+                                    color = TextPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (!stand.korrekt) {
+                                    HinweisBereich(
+                                        text = hinweise[stand.karte.verweis],
+                                        laedt = hinweisLaden,
+                                        onLaden = { holeHinweis(stand.karte) }
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.primary)
+                                            .clickable { weiter() }
+                                            .padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            stringResource(R.string.weiter),
+                                            color = TextPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(24.dp))
                 }
             }
         } else {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                LaunchedEffect(true) {
-                    updateWeakVokabeln(prefs, setCreatedAt, correctVokabeln, wrongVokabeln)
-                    updateSetProgress(prefs, setCreatedAt, correctVokabeln, wrongVokabeln)
+            LaunchedEffect(erledigt) {
+                if (erledigt) {
+                    endeZeit = System.currentTimeMillis()
+                    flushNeu()
                 }
+            }
+            val versucheNachLatein = ergebnisse.count { !it.richtung }
+            val versucheNachDeutsch = ergebnisse.count { it.richtung }
+            val trefferNachLatein = ergebnisse.count { !it.richtung && it.richtig }
+            val trefferNachDeutsch = ergebnisse.count { it.richtung && it.richtig }
+            val quoteNachLatein = if (versucheNachLatein == 0) 0
+            else trefferNachLatein * 100 / versucheNachLatein
+            val quoteNachDeutsch = if (versucheNachDeutsch == 0) 0
+            else trefferNachDeutsch * 100 / versucheNachDeutsch
+            val dauerMinuten =
+                maxOf(1, ((endeZeit - startZeit).coerceAtLeast(0L) / 60000L).toInt())
+            val sitztListe = remember(erledigt) {
+                ergebnisse.map { it.setId }.distinct().filter { it > 0L }.flatMap { setId ->
+                    val fortschritt = loadSetProgress(prefs, setId)
+                    queue.map { it.vokabel }.distinctBy { it.latein }.filter {
+                        (fortschritt.vokabelProgress[it.id]?.streak ?: 0) >= SITZT_STREAK
+                    }.map { it.latein }
+                }
+            }
+            val nochUebung = falscheKarten.map { it.vokabel.latein }
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(
                     modifier = Modifier
                         .padding(24.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(BgSurface)
-                        .padding(32.dp),
+                        .padding(28.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text("🎉", fontSize = 48.sp)
+                    Text("🎉", fontSize = 44.sp)
                     Text(
                         stringResource(R.string.fertig_ausruf),
                         color = TextPrimary,
-                        fontSize = 28.sp,
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        pluralStringResource(R.plurals.vokabeln_abgefragt, shuffled.size, shuffled.size),
+                        "${pluralStringResource(R.plurals.vokabeln_abgefragt, queue.size, queue.size)}  ·  " +
+                            stringResource(R.string.lernzeit, dauerMinuten),
                         color = TextSecondary,
-                        fontSize = 14.sp
+                        fontSize = 13.sp
                     )
+                    if (versucheNachLatein > 0 || versucheNachDeutsch > 0) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            if (versucheNachLatein > 0) {
+                                Text(
+                                    "${stringResource(R.string.la_de)} $quoteNachLatein%",
+                                    color = TextTertiary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            if (versucheNachDeutsch > 0) {
+                                Text(
+                                    "${stringResource(R.string.de_la)} $quoteNachDeutsch%",
+                                    color = TextTertiary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                "$correct",
-                                fontSize = 32.sp,
+                                "$richtigAnzahl",
+                                fontSize = 30.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = AccentViolet
                             )
@@ -1842,12 +2385,49 @@ fun LearnScreen(
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                "$wrong",
-                                fontSize = 32.sp,
+                                "$falschAnzahl",
+                                fontSize = 30.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFEF5350)
                             )
                             Text(stringResource(R.string.falsch), color = TextTertiary, fontSize = 12.sp)
+                        }
+                    }
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.das_kannst_du),
+                            color = AccentViolet,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            if (sitztListe.isEmpty()) stringResource(R.string.noch_nichts_sitzt)
+                            else sitztListe.take(8).joinToString(", ") +
+                                    if (sitztListe.size > 8) " +${sitztListe.size - 8}" else "",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                    if (nochUebung.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.braucht_nochmal),
+                                color = Color(0xFFEF5350),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                nochUebung.take(8).joinToString(", ") +
+                                        if (nochUebung.size > 8) " +${nochUebung.size - 8}" else "",
+                                color = TextSecondary,
+                                fontSize = 13.sp
+                            )
                         }
                     }
                     Box(
@@ -1856,11 +2436,16 @@ fun LearnScreen(
                             .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.primary)
                             .clickable {
-                                clearSessionState(prefs, setCreatedAt)
-                                shuffled = vokabeln.shuffled()
-                                currentIndex = 0; correct = 0; wrong = 0
-                                correctVokabeln = emptyList(); wrongVokabeln = emptyList()
-                                showAnswer = false
+                                clearSessionState(prefs, sessionKey)
+                                queue = ordneKarten(basis, shuffleOrder)
+                                index = 0
+                                ergebnisse = emptyList()
+                                falscheKarten = emptyList()
+                                flushMarke = 0
+                                aufgedeckt = false
+                                feedback = null
+                                startZeit = System.currentTimeMillis()
+                                endeZeit = 0L
                             }
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center
@@ -1872,22 +2457,28 @@ fun LearnScreen(
                             fontWeight = FontWeight.SemiBold
                         )
                     }
-                    if (wrongVokabeln.isNotEmpty()) {
+                    if (falscheKarten.isNotEmpty()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(Color(0xFFB71C1C).copy(alpha = 0.25f))
                                 .clickable {
-                                    shuffled = wrongVokabeln.shuffled()
-                                    wrongVokabeln = emptyList()
-                                    currentIndex = 0; correct = 0; wrong = 0; showAnswer = false
+                                    queue = ordneKarten(falscheKarten, shuffleOrder)
+                                    index = 0
+                                    ergebnisse = emptyList()
+                                    falscheKarten = emptyList()
+                                    flushMarke = 0
+                                    aufgedeckt = false
+                                    feedback = null
+                                    startZeit = System.currentTimeMillis()
+                                    endeZeit = 0L
                                 }
                                 .padding(vertical = 14.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                stringResource(R.string.falsche_wiederholen, wrongVokabeln.size),
+                                stringResource(R.string.falsche_wiederholen, falscheKarten.size),
                                 color = Color(0xFFEF5350),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1902,7 +2493,13 @@ fun LearnScreen(
                             .clickable { handleBack() }
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center
-                    ) { Text(stringResource(R.string.zuruck_zur_ubersicht), color = TextSecondary, fontSize = 14.sp) }
+                    ) {
+                        Text(
+                            stringResource(R.string.zuruck_zur_ubersicht),
+                            color = TextSecondary,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }
@@ -1911,18 +2508,68 @@ fun LearnScreen(
     if (setToReview) {
         Box(Modifier.fillMaxSize()) {
             ReviewScreen(
-                vokabeln = vokabeln,
+                vokabeln = basis.map { it.vokabel },
                 onBack = { setToReview = false },
-                onVokabelnChanged = { new ->
-                    vokabeln = new
-                    shuffled = new.shuffled()
-                    onVokabelnUpdated?.invoke(new)
+                onVokabelnChanged = { neu ->
+                    val alteSetIds = basis.map { it.setId }
+                    val alteRichtungen = basis.map { it.richtung }
+                    basis = neu.mapIndexed { i, v ->
+                        LernKarte(
+                            vokabel = v,
+                            setId = alteSetIds.getOrNull(i) ?: 0L,
+                            richtung = alteRichtungen.getOrNull(i) ?: richtung
+                        )
+                    }
+                    queue = queue.mapNotNull { c ->
+                        neu.firstOrNull { it.latein == c.vokabel.latein }?.let { c.copy(vokabel = it) }
+                    }
+                    index = index.coerceAtMost(queue.size)
+                    onVokabelnUpdated?.invoke(neu)
                 },
                 onSave = { onRenameRequest() },
                 setName = setName,
                 checkExist = true,
                 paddingValues = paddingValues
             )
+        }
+    }
+
+    pendingShuffle?.let { value ->
+        AlertDialogTabslify(
+            title = stringResource(R.string.reihenfolge_wechseln),
+            text = stringResource(R.string.reihenfolge_wechseln_text),
+            confirmText = stringResource(R.string.neu_starten),
+            onConfirm = { applyShuffleOrder(value) },
+            onDismiss = { pendingShuffle = null }
+        )
+    }
+}
+
+@Composable
+private fun HinweisBereich(
+    text: String?,
+    laedt: Boolean,
+    onLaden: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(BgCard)
+                .clickable(enabled = !laedt) { onLaden() }
+                .padding(horizontal = 12.dp, vertical = 7.dp)
+        ) {
+            Text(
+                if (laedt) stringResource(R.string.ki_denkt)
+                else if (text == null) stringResource(R.string.hinweis_holen)
+                else stringResource(R.string.hinweis_erneut),
+                color = TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        if (text != null) {
+            Text(text, color = TextSecondary, fontSize = 13.sp)
         }
     }
 }
@@ -2163,10 +2810,15 @@ fun createMergedVocabSet(
 }
 
 private const val SETS_KEY = "vocab_sets"
+private const val SHUFFLE_KEY = "shuffle_order"
+
+private fun ordneKarten(source: List<LernKarte>, shuffle: Boolean): List<LernKarte> =
+    if (shuffle) source.shuffled() else source
 
 fun saveVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet> {
     val existing = loadVokabelSets(prefs).toMutableList()
-    val idx = existing.indexOfFirst { it.name == set.name }
+    val nachId = existing.indexOfFirst { it.createdAt == set.createdAt }
+    val idx = if (nachId >= 0) nachId else existing.indexOfFirst { it.name == set.name }
     if (idx >= 0) existing[idx] = set else existing.add(0, set)
     existing.sortByDescending { it.lastUsed }
     val json = JSONArray().also { arr ->
@@ -2218,6 +2870,8 @@ fun loadVokabelSets(prefs: SharedPreferences): List<VokabelSet> {
 
 fun deleteVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet> {
     val updated = loadVokabelSets(prefs).filter { it.createdAt != set.createdAt }
+    val hinweisPraefix = "hinweis_${set.createdAt}:"
+    val hinweisKeys = prefs.all.keys.filter { it.startsWith(hinweisPraefix) }
     val json = JSONArray().also { arr ->
         updated.forEach { s ->
             arr.put(JSONObject().apply {
@@ -2243,6 +2897,7 @@ fun deleteVokabelSet(prefs: SharedPreferences, set: VokabelSet): List<VokabelSet
         putString(SETS_KEY, json)
         remove("progress_${set.createdAt}")
         remove("weak_${set.createdAt}")
+        hinweisKeys.forEach { remove(it) }
     }
     return updated
 }
@@ -2276,9 +2931,9 @@ fun loadWeakVokabeln(prefs: SharedPreferences, setCreatedAt: Long): List<Vokabel
     val raw = prefs.getString("weak_$setCreatedAt", null) ?: return emptyList()
     return try {
         val arr = JSONArray(raw)
-        (0 until arr.length()).map {
-            val o = arr.getJSONObject(it)
-            Vokabel(o.getString("latein"), o.getString("deutsch"), o.getInt("id"))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            Vokabel(o.getString("latein"), o.getString("deutsch"), o.optInt("id", i))
         }
     } catch (_: Exception) {
         emptyList()
@@ -2293,7 +2948,9 @@ fun saveWeakVokabeln(
     val json = JSONArray().also { arr ->
         list.forEach { v ->
             arr.put(
-                JSONObject().apply { put("latein", v.latein); put("deutsch", v.deutsch) })
+                JSONObject().apply {
+                    put("latein", v.latein); put("deutsch", v.deutsch); put("id", v.id)
+                })
         }
     }.toString()
     prefs.edit { putString("weak_$setCreatedAt", json) }
@@ -2323,7 +2980,8 @@ fun loadSetProgress(prefs: SharedPreferences, setCreatedAt: Long): SetProgress {
                 vokabelId = vp.getInt("vokabelId"),
                 correctCount = vp.getInt("correctCount"),
                 wrongCount = vp.getInt("wrongCount"),
-                lastPracticed = vp.getLong("lastPracticed")
+                lastPracticed = vp.getLong("lastPracticed"),
+                streak = vp.optInt("streak", 0)
             )
         }
         SetProgress(
@@ -2349,6 +3007,7 @@ fun saveSetProgress(prefs: SharedPreferences, progress: SetProgress) {
                     put("correctCount", vp.correctCount)
                     put("wrongCount", vp.wrongCount)
                     put("lastPracticed", vp.lastPracticed)
+                    put("streak", vp.streak)
                 })
             }
         })
@@ -2370,6 +3029,7 @@ fun updateSetProgress(
         val existing = updatedMap[vokabel.id] ?: VokabelProgress(vokabel.id)
         updatedMap[vokabel.id] = existing.copy(
             correctCount = existing.correctCount + 1,
+            streak = existing.streak + 1,
             lastPracticed = now
         )
     }
@@ -2378,6 +3038,7 @@ fun updateSetProgress(
         val existing = updatedMap[vokabel.id] ?: VokabelProgress(vokabel.id)
         updatedMap[vokabel.id] = existing.copy(
             wrongCount = existing.wrongCount + 1,
+            streak = 0,
             lastPracticed = now
         )
     }
@@ -2391,19 +3052,56 @@ fun updateSetProgress(
     saveSetProgress(prefs, updatedProgress)
 }
 
+fun uebernehmeErgebnisse(prefs: SharedPreferences, ergebnisse: List<LernErgebnis>) {
+    if (ergebnisse.isEmpty()) return
+    val letzterStand = ergebnisse.associateBy { it.setId to it.vokabel.id }
+    letzterStand.values.groupBy { it.setId }.forEach { (setId, eintraege) ->
+        if (setId == 0L) return@forEach
+        val richtige = eintraege.filter { it.richtig }.map { it.vokabel }
+        val falsche = eintraege.filter { !it.richtig }.map { it.vokabel }
+        updateWeakVokabeln(prefs, setId, richtige, falsche)
+        updateSetProgress(prefs, setId, richtige, falsche)
+    }
+}
+
+private fun lernKarteZuJson(karte: LernKarte): JSONObject = JSONObject().apply {
+    put("setId", karte.setId)
+    put("id", karte.vokabel.id)
+    put("richtung", karte.richtung)
+    put("latein", karte.vokabel.latein)
+    put("deutsch", karte.vokabel.deutsch)
+}
+
+private fun jsonZuLernKarte(o: JSONObject) = LernKarte(
+    vokabel = Vokabel(o.getString("latein"), o.getString("deutsch"), o.getInt("id")),
+    setId = o.optLong("setId", 0L),
+    richtung = o.optBoolean("richtung", false)
+)
+
 fun saveSessionState(prefs: SharedPreferences, setCreatedAt: Long, state: SessionState) {
+    if (setCreatedAt <= 0L) return
     val json = JSONObject().apply {
-        put("shuffledIds", JSONArray(state.shuffledIds))
+        put("cards", JSONArray().also { arr ->
+            state.cards.forEach { arr.put(
+                JSONObject().apply {
+                    put("setId", it.setId); put("id", it.id); put("richtung", it.richtung)
+                }
+            ) }
+        })
         put("currentIndex", state.currentIndex)
-        put("correctIds", JSONArray(state.correctIds))
-        put("wrongIds", JSONArray(state.wrongIds))
-        put("showDeutsch", state.showDeutsch)
+        put("richtig", state.richtig)
+        put("falsch", state.falsch)
+        put("falscheKarten", JSONArray().also { arr ->
+            state.falscheKarten.forEach { arr.put(lernKarteZuJson(it)) }
+        })
+        put("richtung", state.richtung)
         put("timestamp", state.timestamp)
     }.toString()
     prefs.edit { putString("session_$setCreatedAt", json) }
 }
 
 fun loadSessionState(prefs: SharedPreferences, setCreatedAt: Long): SessionState? {
+    if (setCreatedAt <= 0L) return null
     val raw = prefs.getString("session_$setCreatedAt", null) ?: return null
     return try {
         val obj = JSONObject(raw)
@@ -2412,13 +3110,29 @@ fun loadSessionState(prefs: SharedPreferences, setCreatedAt: Long): SessionState
             clearSessionState(prefs, setCreatedAt)
             return null
         }
-        fun JSONArray.toIntList() = (0 until length()).map { getInt(it) }
+        val cardsArr = obj.getJSONArray("cards")
+        val cards = (0 until cardsArr.length()).map { i ->
+            val o = cardsArr.getJSONObject(i)
+            KartenVerweis(
+                setId = o.optLong("setId", 0L),
+                id = o.getInt("id"),
+                richtung = o.optBoolean("richtung", false)
+            )
+        }
+        if (cards.isEmpty()) {
+            clearSessionState(prefs, setCreatedAt)
+            return null
+        }
+        val falschArr = obj.getJSONArray("falscheKarten")
         SessionState(
-            shuffledIds = obj.getJSONArray("shuffledIds").toIntList(),
+            cards = cards,
             currentIndex = obj.getInt("currentIndex"),
-            correctIds = obj.getJSONArray("correctIds").toIntList(),
-            wrongIds = obj.getJSONArray("wrongIds").toIntList(),
-            showDeutsch = obj.getBoolean("showDeutsch"),
+            richtig = obj.getInt("richtig"),
+            falsch = obj.getInt("falsch"),
+            falscheKarten = (0 until falschArr.length()).map { i ->
+                jsonZuLernKarte(falschArr.getJSONObject(i))
+            },
+            richtung = obj.optBoolean("richtung", false),
             timestamp = timestamp
         )
     } catch (_: Exception) {
@@ -2427,5 +3141,6 @@ fun loadSessionState(prefs: SharedPreferences, setCreatedAt: Long): SessionState
 }
 
 fun clearSessionState(prefs: SharedPreferences, setCreatedAt: Long) {
+    if (setCreatedAt <= 0L) return
     prefs.edit { remove("session_$setCreatedAt") }
 }
