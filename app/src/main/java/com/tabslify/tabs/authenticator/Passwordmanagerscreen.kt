@@ -36,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -100,6 +101,7 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.tabslify.R
 import com.tabslify.core.activities.Tabslify.Companion.appScope
+import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.Config.realDevice
 import com.tabslify.core.objects.prvt
 import kotlinx.coroutines.Dispatchers
@@ -128,6 +130,8 @@ fun PasswordManagerScreen(
     
     val keinNetzwerkVerfuegbarMsg = stringResource(R.string.kein_netzwerk_verfugbar)
     val syncFehlgeschlagenMsg = stringResource(R.string.sync_fehlgeschlagen)
+    val entschluesselungFehlgeschlagenMsg = stringResource(R.string.sync_entschluesselung_fehlgeschlagen)
+    val keinMasterPasswortMsg = stringResource(R.string.cloud_backup_no_master)
     val eintragGespeichertMsg = stringResource(R.string.eintrag_gespeichert)
     val aktualisiertMsg = stringResource(R.string.aktualisiert_2)
     val passwortMsg = stringResource(R.string.passwort)
@@ -143,6 +147,8 @@ fun PasswordManagerScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isSyncing by remember { mutableStateOf(false) }
     var pendingConflicts by remember { mutableStateOf<List<SyncConflict>>(emptyList()) }
+    var diagnosisResult by remember { mutableStateOf<PasswordSyncDiagnosis?>(null) }
+    var diagnosing by remember { mutableStateOf(false) }
 
     fun reload() {
         scope.launch {
@@ -235,6 +241,14 @@ fun PasswordManagerScreen(
                                             isSyncing = true
                                             appScope.launch {
                                                 try {
+                                                    if (Config.masterPassword.isBlank()) {
+                                                        Toast.makeText(
+                                                            appContext,
+                                                            keinMasterPasswortMsg,
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                        return@launch
+                                                    }
                                                     val result = syncPasswordEntriesWithCloud(
                                                         db,
                                                         twoFaDb,
@@ -274,6 +288,24 @@ fun PasswordManagerScreen(
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(Icons.Default.Refresh, stringResource(R.string.import_action_secondary), tint = AccentBlue)
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (!diagnosing) {
+                                        diagnosing = true
+                                        val appContext = context.applicationContext
+                                        appScope.launch {
+                                            try {
+                                                diagnosisResult = diagnosePasswordSync(db, appContext)
+                                            } finally {
+                                                diagnosing = false
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.BugReport, stringResource(R.string.sync_diagnose_titel), tint = AccentBlue)
                             }
                         }
                     }
@@ -430,14 +462,22 @@ fun PasswordManagerScreen(
         SyncConflictDialog(
             conflicts = pendingConflicts,
             onDecision = { conflict, decision ->
-                scope.launch {
-                    applySyncConflictDecision(conflict, decision)
-                }
+                applySyncConflictDecision(conflict, decision, db, twoFaDb)
             },
-            onDone = {
+            onDone = { fails ->
                 pendingConflicts = emptyList()
+                if (fails > 0) {
+                    Toast.makeText(context, entschluesselungFehlgeschlagenMsg.format(fails), Toast.LENGTH_LONG).show()
+                }
                 reload()
             }
+        )
+    }
+
+    diagnosisResult?.let { diagnosis ->
+        SyncDiagnosisDialog(
+            diagnosis = diagnosis,
+            onDismiss = { diagnosisResult = null }
         )
     }
 }
@@ -595,7 +635,6 @@ private fun PasswordDetailSheet(
                     .background(Surface1)
                     .padding(24.dp)
             ) {
-                // ── Titel (fix) ──────────────────────────────────────
                 Text(
                     entry.name,
                     color = TextP,
@@ -607,7 +646,6 @@ private fun PasswordDetailSheet(
 
                 Spacer(Modifier.height(20.dp))
 
-                // ── Scrollbarer Content ──────────────────────────────
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -766,7 +804,6 @@ private fun PasswordDetailSheet(
                     Spacer(Modifier.height(8.dp))
                 } // Ende scrollbarer Content
 
-                // ── Buttons (fix) ────────────────────────────────────
                 Spacer(Modifier.height(16.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1442,17 +1479,35 @@ fun copyToClipboard(context: Context, label: String, value: String, kopiertMsg: 
 @Composable
 fun SyncConflictDialog(
     conflicts: List<SyncConflict>,
-    onDecision: (SyncConflict, SyncConflictDecision) -> Unit,
-    onDone: () -> Unit
+    onDecision: suspend (SyncConflict, SyncConflictDecision) -> Boolean,
+    onDone: (Int) -> Unit
 ) {
     var index by remember { mutableIntStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
+    var failed by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     if (index >= conflicts.size) {
-        LaunchedEffect(Unit) { onDone() }
+        LaunchedEffect(Unit) { onDone(failed) }
         return
     }
 
     val conflict = conflicts[index]
+
+    fun decide(decision: SyncConflictDecision) {
+        if (busy) return
+        scope.launch {
+            busy = true
+            val ok = try {
+                onDecision(conflict, decision)
+            } catch (_: Exception) {
+                false
+            }
+            busy = false
+            if (!ok) failed++
+            index++
+        }
+    }
 
     Dialog(onDismissRequest = {}, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
@@ -1497,6 +1552,7 @@ fun SyncConflictDialog(
                         SyncConflictType.TOTP_CLOUD_ONLY -> stringResource(R.string.sync_konflikt_totp_cloud_only)
                         SyncConflictType.TOTP_LOCAL_ONLY -> stringResource(R.string.sync_konflikt_totp_local_only)
                         SyncConflictType.TOTP_DIFFERENT -> stringResource(R.string.sync_konflikt_totp_different)
+                        SyncConflictType.PASSWORD_DIFFERENT -> stringResource(R.string.sync_konflikt_password_different)
                     },
                     color = TextS,
                     fontSize = 13.sp
@@ -1511,8 +1567,7 @@ fun SyncConflictDialog(
                 SyncConflictType.CLOUD_ONLY_ENTRY -> {
                     Button(
                         onClick = {
-                            onDecision(conflict, SyncConflictDecision.KEEP_CLOUD)
-                            index++
+                            decide(SyncConflictDecision.KEEP_CLOUD)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                         modifier = Modifier.fillMaxWidth()
@@ -1521,8 +1576,7 @@ fun SyncConflictDialog(
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
-                            onDecision(conflict, SyncConflictDecision.DELETE_CLOUD)
-                            index++
+                            decide(SyncConflictDecision.DELETE_CLOUD)
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.loschen), color = AccentRed) }
@@ -1531,8 +1585,7 @@ fun SyncConflictDialog(
                 SyncConflictType.LOCAL_ONLY_ENTRY -> {
                     Button(
                         onClick = {
-                            onDecision(conflict, SyncConflictDecision.UPLOAD_LOCAL)
-                            index++
+                            decide(SyncConflictDecision.UPLOAD_LOCAL)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                         modifier = Modifier.fillMaxWidth()
@@ -1541,8 +1594,7 @@ fun SyncConflictDialog(
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
-                            onDecision(conflict, SyncConflictDecision.KEEP_LOCAL)
-                            index++
+                            decide(SyncConflictDecision.KEEP_LOCAL)
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.sync_uberspringen), color = TextS) }
@@ -1551,8 +1603,7 @@ fun SyncConflictDialog(
                 SyncConflictType.TOTP_CLOUD_ONLY -> {
                     Button(
                         onClick = {
-                            onDecision(conflict, SyncConflictDecision.KEEP_CLOUD)
-                            index++
+                            decide(SyncConflictDecision.KEEP_CLOUD)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                         modifier = Modifier.fillMaxWidth()
@@ -1561,19 +1612,35 @@ fun SyncConflictDialog(
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
-                            onDecision(conflict, SyncConflictDecision.DELETE_CLOUD)
-                            index++
+                            decide(SyncConflictDecision.DELETE_CLOUD)
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.sync_totp_cloud_loschen), color = AccentRed) }
+                }
+
+                SyncConflictType.PASSWORD_DIFFERENT -> {
+                    Button(
+                        onClick = {
+                            decide(SyncConflictDecision.KEEP_CLOUD)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_cloud_behalten)) }
+
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            decide(SyncConflictDecision.UPLOAD_LOCAL)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.sync_lokal_hochladen), color = TextS) }
                 }
 
                 SyncConflictType.TOTP_LOCAL_ONLY,
                 SyncConflictType.TOTP_DIFFERENT -> {
                     Button(
                         onClick = {
-                            onDecision(conflict, SyncConflictDecision.UPLOAD_LOCAL)
-                            index++
+                            decide(SyncConflictDecision.UPLOAD_LOCAL)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                         modifier = Modifier.fillMaxWidth()
@@ -1582,13 +1649,171 @@ fun SyncConflictDialog(
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
-                            onDecision(conflict, SyncConflictDecision.KEEP_CLOUD)
-                            index++
+                            decide(SyncConflictDecision.KEEP_CLOUD)
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.sync_totp_cloud_behalten), color = TextS) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SyncDiagnosisStatusRow(label: String, value: String, ok: Boolean?) {
+    val color = when (ok) {
+        true -> Color(0xFF4CAF50)
+        false -> AccentRed
+        null -> TextS
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = TextS, fontSize = 13.sp)
+        Text(value, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+fun SyncDiagnosisDialog(
+    diagnosis: PasswordSyncDiagnosis,
+    onDismiss: () -> Unit
+) {
+    val ja = stringResource(R.string.ja)
+    val nein = stringResource(R.string.nein)
+    val lastSyncText = if (diagnosis.lastSyncMillis <= 0L) {
+        stringResource(R.string.sync_diagnose_nie)
+    } else {
+        java.text.DateFormat.getDateTimeInstance(
+            java.text.DateFormat.SHORT,
+            java.text.DateFormat.SHORT
+        ).format(java.util.Date(diagnosis.lastSyncMillis))
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Surface1)
+                .padding(24.dp)
+        ) {
+            Text(
+                stringResource(R.string.sync_diagnose_titel),
+                color = TextP,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(12.dp))
+            SyncDiagnosisStatusRow(
+                stringResource(R.string.sync_diagnose_geraet),
+                diagnosis.deviceName,
+                null
+            )
+            SyncDiagnosisStatusRow(
+                stringResource(R.string.sync_diagnose_echtes_geraet),
+                if (diagnosis.realDevice) ja else nein,
+                diagnosis.realDevice
+            )
+            SyncDiagnosisStatusRow(
+                stringResource(R.string.sync_diagnose_dev_modus),
+                if (diagnosis.prvtMode) ja else nein,
+                diagnosis.prvtMode
+            )
+            SyncDiagnosisStatusRow(
+                stringResource(R.string.sync_diagnose_master_gesetzt),
+                if (diagnosis.masterPasswordSet) ja else nein,
+                diagnosis.masterPasswordSet
+            )
+            SyncDiagnosisStatusRow(
+                stringResource(R.string.sync_diagnose_online),
+                if (diagnosis.online) ja else nein,
+                diagnosis.online
+            )
+            SyncDiagnosisStatusRow(
+                stringResource(R.string.sync_diagnose_lokal),
+                diagnosis.localCount.toString(),
+                null
+            )
+            SyncDiagnosisStatusRow(
+                stringResource(R.string.sync_diagnose_cloud),
+                diagnosis.cloudCount.toString(),
+                null
+            )
+            SyncDiagnosisStatusRow(
+                stringResource(R.string.sync_diagnose_letzter_sync),
+                lastSyncText,
+                null
+            )
+            diagnosis.cloudError?.let {
+                Spacer(Modifier.height(4.dp))
+                Text("${stringResource(R.string.fehler)}: $it", color = AccentRed, fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "${stringResource(R.string.sync_diagnose_eintraege)} (${diagnosis.entries.size})",
+                color = TextP,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(4.dp))
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .heightIn(max = 320.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(diagnosis.entries, key = { it.name + "|" + it.username }) { entry ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Surface2)
+                            .padding(12.dp)
+                    ) {
+                        Text(entry.name, color = TextP, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        if (entry.username.isNotEmpty()) {
+                            Text(entry.username, color = TextS, fontSize = 12.sp)
+                        }
+                        if (entry.url.isNotEmpty()) {
+                            Text(entry.url, color = TextS, fontSize = 12.sp)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        SyncDiagnosisStatusRow(
+                            stringResource(R.string.sync_diagnose_pw_entschluesselbar),
+                            if (entry.passwordDecryptOk) ja else nein,
+                            entry.passwordDecryptOk
+                        )
+                        SyncDiagnosisStatusRow(
+                            stringResource(R.string.sync_diagnose_pw_laenge),
+                            if (entry.passwordLength < 0) "?" else entry.passwordLength.toString(),
+                            entry.passwordLength > 0
+                        )
+                        SyncDiagnosisStatusRow(
+                            stringResource(R.string.sync_diagnose_totp_in_cloud),
+                            if (entry.totpInCloud) ja else nein,
+                            null
+                        )
+                        if (entry.totpInCloud) {
+                            SyncDiagnosisStatusRow(
+                                stringResource(R.string.sync_diagnose_totp_entschluesselbar),
+                                if (entry.totpDecryptOk) ja else nein,
+                                entry.totpDecryptOk
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(R.string.close)) }
         }
     }
 }
