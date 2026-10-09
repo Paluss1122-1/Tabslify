@@ -139,21 +139,22 @@ fun storeNewEpisodes(
     }
 }
 
-private fun podcastDocumentBuilderFactory(): DocumentBuilderFactory =
-    DocumentBuilderFactory.newInstance().apply {
-        runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
-        runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
-        runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
-        runCatching { setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
-        runCatching {
-            setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
-        }
-        runCatching {
-            setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
-        }
-        runCatching { isXIncludeAware = false }
-        runCatching { isExpandEntityReferences = false }
+private fun podcastDocumentBuilderFactory(): DocumentBuilderFactory {
+    val factory = DocumentBuilderFactory.newInstance()
+    runCatching { factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+    runCatching { factory.setFeature("http://xml.org/sax/features/external-general-entities", false) }
+    runCatching { factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+    runCatching { factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
+    runCatching {
+        factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
     }
+    runCatching {
+        factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+    }
+    runCatching { factory.isXIncludeAware = false }
+    runCatching { factory.isExpandEntityReferences = false }
+    return factory
+}
 
 private val PODCAST_PUBDATE_PATTERNS = listOf(
     "EEE, d MMM yyyy HH:mm:ss zzz",
@@ -217,8 +218,9 @@ suspend fun fetchPodcastFeed(feedUrl: String): Document = withContext(Dispatcher
     }
     val xml = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
     conn.disconnect()
-    podcastDocumentBuilderFactory().newDocumentBuilder()
-        .parse(InputSource(StringReader(xml)))
+    val builder = podcastDocumentBuilderFactory().newDocumentBuilder()
+    builder.setEntityResolver { _, _ -> InputSource(StringReader("")) }
+    builder.parse(InputSource(StringReader(xml)))
 }
 
 private fun podcastCheckThreshold(): Long = ZonedDateTime.now(ZoneId.systemDefault())
