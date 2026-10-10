@@ -118,8 +118,7 @@ class WhatsAppNotificationListener : NotificationListenerService() {
 
         fun cancelExternalNotificationByKey(key: String): Boolean {
             val svc = instance?.get() ?: return false
-            if (!svc.listenerConnected) return false
-            return try {
+            return !svc.listenerConnected && try {
                 val exists = svc.activeNotifications?.any { it.key == key } == true
                 if (exists) {
                     svc.cancelNotification(key)
