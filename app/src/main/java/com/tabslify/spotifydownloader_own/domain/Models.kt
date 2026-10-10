@@ -11,7 +11,6 @@ sealed class DownloadState {
         val trackId: String,
         val title: String,
         val artist: String,
-        val album: String,
         val fileName: String,
         val fileUri: Uri,
         val note: String? = null
