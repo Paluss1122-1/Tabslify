@@ -20,7 +20,6 @@ import com.tabslify.inactive.ChatService
 import com.tabslify.services.QuietHoursNotificationService.Companion.CHANNEL_ID
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -28,7 +27,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.seconds
 
-@OptIn(DelicateCoroutinesApi::class)
 fun showLastFriendMessages(context: Context) {
     serviceScope.launch(Dispatchers.IO) {
         try {
