@@ -44,7 +44,6 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -109,7 +108,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.ExperimentalTime
 
 data class LocalFileInfo(
     val file: File,
@@ -120,7 +118,6 @@ data class LocalFileInfo(
     var isFavorite: Boolean = false
 )
 
-@OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
 @Composable
 fun OtherBucketViewer(
     onBackPressed: () -> Unit,
