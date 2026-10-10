@@ -107,7 +107,6 @@ class DownloadRepositoryImpl(
                         trackId = trackId,
                         title = song.title,
                         artist = song.artist,
-                        album = song.album,
                         fileName = fileName,
                         fileUri = fileUri,
                         note = song.hashtags.takeIf { it.isNotBlank() }
@@ -228,7 +227,6 @@ class DownloadRepositoryImpl(
                     trackId = trackId,
                     title = trackTitle,
                     artist = artist,
-                    album = album,
                     fileName = fileName,
                     fileUri = fileUri,
                     note = hashtags?.takeIf { it.isNotBlank() }
