@@ -1,6 +1,7 @@
 package com.tabslify.core.functions
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.tabslify.core.activities.Tabslify.Companion.appScope
 import com.tabslify.core.objects.Config
@@ -46,13 +47,13 @@ private data class PodcastProgressRow(
     val completed_at: Long = 0L,
 )
 
-fun podcastProgressPrefs(context: Context) =
+fun podcastProgressPrefs(context: Context): SharedPreferences =
     context.getSharedPreferences(PODCAST_PROGRESS_PREFS, Context.MODE_PRIVATE)
 
 fun podcastFileCompletionKey(fileName: String) = FILE_KEY_PREFIX + fileName
 
 fun podcastCompletionKey(audioUrl: String, fileName: String): String =
-    if (audioUrl.isNotBlank()) audioUrl else podcastFileCompletionKey(fileName)
+    audioUrl.ifBlank { podcastFileCompletionKey(fileName) }
 
 fun loadPodcastCompletions(context: Context): Map<String, PodcastCompletion> {
     val result = mutableMapOf<String, PodcastCompletion>()
