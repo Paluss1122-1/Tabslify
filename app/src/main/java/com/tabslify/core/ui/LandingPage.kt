@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.net.TrafficStats
 import android.os.Build
-import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -63,7 +62,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -73,7 +71,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -95,7 +92,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -192,17 +188,6 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.compose.ui.platform.LocalLocale
-
-val inAppNotifications = mutableStateListOf<String>()
-private const val MAX_IN_APP_NOTIFICATIONS = 20
-
-@Suppress("unused")
-fun sendInAppNotification(message: String) {
-    inAppNotifications.add(0, message)
-    if (inAppNotifications.size > MAX_IN_APP_NOTIFICATIONS) {
-        inAppNotifications.removeRange(MAX_IN_APP_NOTIFICATIONS, inAppNotifications.size)
-    }
-}
 
 fun saveRecentTab(context: Context, menuItem: MenuItem) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -376,6 +361,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 "weather" -> MenuItem.WEATHER
                 "aitab" -> MenuItem.AITAB
                 "ai_questions" -> MenuItem.AITAB
+                "text_aktionen" -> MenuItem.AITAB
                 "apkm" -> MenuItem.APKM_INSTALLER
                 "gmail" -> MenuItem.GMAIL
                 "virustotal" -> MenuItem.VIRUSTOTAL
@@ -423,6 +409,7 @@ fun LandingPageOrApp(storage: Storage, startTarget: String?) {
                 when (target) {
                     "weather" -> MenuItem.WEATHER
                     "ai_questions" -> MenuItem.AITAB
+                    "text_aktionen" -> MenuItem.AITAB
                     "apkm" -> MenuItem.APKM_INSTALLER
                     "gmail" -> MenuItem.GMAIL
                     "virustotal" -> MenuItem.VIRUSTOTAL
@@ -808,7 +795,6 @@ fun SupabaseLoginScreen(onLoggedIn: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LandingPage(
     onTabSelected: (MenuItem) -> Unit,
@@ -874,49 +860,16 @@ fun LandingPage(
                         textAlign = TextAlign.Center
                     )
 
-                    var showNotifications by remember { mutableStateOf(false) }
-
                     Row(
                         modifier = Modifier.align(Alignment.CenterEnd),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (prvt()) {
-                            IconButton(onClick = { showNotifications = true }) {
-                                Icon(
-                                    Icons.Default.Notifications,
-                                    contentDescription = stringResource(R.string.open_notification_frame),
-                                    tint = Color.White
-                                )
-                            }
-                        }
                         IconButton(onClick = { showSettings = true }) {
                             Icon(
                                 Icons.Default.Settings,
                                 contentDescription = stringResource(R.string.open_settings_frame),
                                 tint = Color.White
                             )
-                        }
-                    }
-
-                    Box(modifier = Modifier.align(Alignment.CenterEnd)) {
-                        DropdownMenu(
-                            expanded = showNotifications,
-                            onDismissRequest = { showNotifications = false },
-                            containerColor = Color.Black
-                        ) {
-                            if (inAppNotifications.isEmpty()) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.keine_benachrichtigungen)) },
-                                    onClick = { showNotifications = false }
-                                )
-                            } else {
-                                inAppNotifications.forEach { notif ->
-                                    DropdownMenuItem(
-                                        text = { Text(notif) },
-                                        onClick = { showNotifications = false }
-                                    )
-                                }
-                            }
                         }
                     }
                 }
@@ -1965,9 +1918,8 @@ fun SettingsFrame(
 
         val intent = Intent(context, cls)
         val permissionOk =
-            if (cls == QuietHoursNotificationService::class.java ||
-                cls == FocusGuardService::class.java
-            ) hasNotificationPermission else true
+            !(cls == QuietHoursNotificationService::class.java ||
+                    cls == FocusGuardService::class.java) || hasNotificationPermission
 
         if (enabled && masterEnabled && permissionOk) {
             when (cls) {
@@ -2028,7 +1980,7 @@ fun SettingsFrame(
         serviceBattery = prefs.getBoolean("service_battery", true)
 
         if (permitted) {
-            serviceQhns = if (intendedToEnableQhns) true else prefs.getBoolean("service_qhns", true)
+            serviceQhns = intendedToEnableQhns || prefs.getBoolean("service_qhns", true)
             serviceFocusguard = prefs.getBoolean("service_focusguard", true)
             intendedToEnableQhns = false
         } else {
