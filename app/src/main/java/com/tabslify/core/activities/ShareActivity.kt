@@ -160,8 +160,7 @@ class ShareActivity : ComponentActivity() {
         fileName: String,
         mimeType: String
     ): Boolean {
-        if (laptopIp.isEmpty() || !prvt()) return false
-        return try {
+        return !(laptopIp.isEmpty() || !prvt()) && try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(laptopIp, Config.IMAGE_SHARE_PORT), 3000)
                 socket.getOutputStream().use { out ->
