@@ -79,7 +79,6 @@ import com.tabslify.tabs.mediaplayer.PodcastShowManager
 import com.tabslify.tabs.weathernot
 import io.github.jan.supabase.functions.functions
 import io.ktor.client.statement.bodyAsText
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -831,7 +830,6 @@ private fun getAvailableCommands(context: Context): List<Command> {
     )
 }
 
-@OptIn(DelicateCoroutinesApi::class)
 fun executeCommand(commandText: String, context: Context) {
     val prefs = context.getSharedPreferences("app_prefs", MODE_PRIVATE)
     if (!prefs.getBoolean("services_master", true) || !prefs.getBoolean("service_qhns", false)) {
@@ -1809,7 +1807,7 @@ fun executeCommand(commandText: String, context: Context) {
     }
 
     val commands = getAvailableCommands(context).filter { cmd ->
-        if (prvt()) true else (
+        prvt() || (
                 cmd.name != "t" && cmd.name != "friendmessages" && cmd.name != "whatsapp" &&
                         cmd.name != "tb" && cmd.name != "bitwarden" && cmd.name != "." &&
                         cmd.name != "errors" && cmd.name != "bahn" && cmd.name != "Other" &&
@@ -1873,7 +1871,7 @@ fun executeCommand(commandText: String, context: Context) {
 
 private fun showAvailableCommands(context: Context) {
     val commands = getAvailableCommands(context).filter { cmd ->
-        if (prvt()) true else (
+        prvt() || (
                 cmd.name != "t" && cmd.name != "friendmessages" && cmd.name != "whatsapp" &&
                         cmd.name != "tb" && cmd.name != "bitwarden" && cmd.name != "." &&
                         cmd.name != "errors" && cmd.name != "bahn" && cmd.name != "Other" &&
