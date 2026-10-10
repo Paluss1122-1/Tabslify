@@ -26,6 +26,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 object BluetoothAppWatcher {
     private const val PREFS = "bluetooth_app_watcher"
@@ -54,7 +55,7 @@ object BluetoothAppWatcher {
         job = serviceScope.launch(Dispatchers.IO) {
             while (isActive) {
                 runCatching { tick(ctx) }
-                delay(POLL_MS)
+                delay(POLL_MS.milliseconds)
             }
         }
     }
