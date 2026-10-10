@@ -135,6 +135,7 @@ class MainActivity : FragmentActivity() {
         applyEmailDeepLink(intent)
         applyAiNotifyDeepLink(intent)
         applyVirusTotalDeepLink(intent)
+        applyTextActionDeepLink(intent)
         setContent {
             val appColor = rememberAppColor()
             MaterialTheme(
@@ -190,6 +191,7 @@ class MainActivity : FragmentActivity() {
         applyEmailDeepLink(intent)
         applyAiNotifyDeepLink(intent)
         applyVirusTotalDeepLink(intent)
+        applyTextActionDeepLink(intent)
     }
 
     private fun applyEmailDeepLink(intent: Intent) {
@@ -209,6 +211,13 @@ class MainActivity : FragmentActivity() {
     private fun applyVirusTotalDeepLink(intent: Intent) {
         intent.getStringExtra("vt_report_id")?.let { reportId ->
             pendingVirusTotalReport = reportId
+        }
+    }
+
+    private fun applyTextActionDeepLink(intent: Intent) {
+        val prompt = intent.getStringExtra("ai_prompt")?.trim()
+        if (!prompt.isNullOrEmpty()) {
+            sharedViewModel.setPendingAiPrompt(prompt)
         }
     }
 
