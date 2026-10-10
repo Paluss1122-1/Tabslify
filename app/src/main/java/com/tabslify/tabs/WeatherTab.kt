@@ -15,7 +15,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -220,7 +219,7 @@ suspend fun fetchWeatherForecast(
                     feelsLike = h["feelslike_c"]?.jsonPrimitive?.doubleOrNull ?: Double.NaN,
                     humidity = h["humidity"]?.jsonPrimitive?.intOrNull ?: 0,
                     wind = h["wind_kph"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
-                    pressure = h["pressure_mb"]?.jsonPrimitive?.intOrNull ?: 0
+                    pressure = h["pressure_mb"]?.jsonPrimitive?.doubleOrNull?.toInt() ?: 0
                 )
             }
 
@@ -315,7 +314,6 @@ suspend fun getLastKnownLocation(context: Context): Location? {
 
 data class SelectionState(val hour: HourData?, val dayIndex: Int?)
 
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun WeatherTabContent(
     viewModel: TabNavigationViewModel,
