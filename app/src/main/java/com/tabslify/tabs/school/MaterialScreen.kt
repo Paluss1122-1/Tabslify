@@ -58,7 +58,6 @@ import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -132,7 +131,6 @@ data class AiSummaryState(
 )
 
 @SuppressLint("AutoboxingStateCreation")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MaterialienScreen(
     onBack: () -> Unit,
