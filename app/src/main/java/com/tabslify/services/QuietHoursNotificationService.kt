@@ -112,7 +112,6 @@ import com.tabslify.quiethoursnotificationhelper.createNotificationChannel
 import com.tabslify.quiethoursnotificationhelper.deleteGalleryImage
 import com.tabslify.quiethoursnotificationhelper.ensureReadyForConnect
 import com.tabslify.quiethoursnotificationhelper.getTodayKey
-import com.tabslify.quiethoursnotificationhelper.isQuietHoursNow
 import com.tabslify.quiethoursnotificationhelper.loadGalleryImages
 import com.tabslify.quiethoursnotificationhelper.loadTodayOrYesterdayEntry
 import com.tabslify.quiethoursnotificationhelper.markMessageAsRead
@@ -428,7 +427,6 @@ class QuietHoursNotificationService : Service() {
                 handler.removeCallbacks(checkRunnable)
 
                 try {
-                    isCurrentlyQuietHours = isQuietHoursNow(this)
                     updateNotification(this)
                 } catch (e: Exception) {
                     reportServiceError("prefChangeListener:$key", e)
@@ -446,7 +444,7 @@ class QuietHoursNotificationService : Service() {
             createNotificationChannel(this)
             startForeground(
                 NOTIFICATION_ID,
-                createNotification(isCurrentlyQuietHours, this)
+                createNotification(this)
             )
             stopSelf()
             return
@@ -456,9 +454,8 @@ class QuietHoursNotificationService : Service() {
         sharedPreferences = getSharedPreferences("quiet_hours_prefs", MODE_PRIVATE)
         createNotificationChannel(this)
 
-        isCurrentlyQuietHours = isQuietHoursNow(this)
         try {
-            startForeground(NOTIFICATION_ID, createNotification(isCurrentlyQuietHours, this))
+            startForeground(NOTIFICATION_ID, createNotification(this))
         } catch (e: Exception) {
             reportServiceError("onCreate:startForeground", e)
         }
@@ -620,10 +617,9 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_SCHEDULED_START -> {
-                    isCurrentlyQuietHours = isQuietHoursNow(this)
                     startForeground(
                         NOTIFICATION_ID,
-                        createNotification(isCurrentlyQuietHours, this)
+                        createNotification(this)
                     )
                     START_STICKY
                 }
@@ -647,7 +643,7 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_RESTORE_NOTIFICATION -> {
-                    val notification = createNotification(isCurrentlyQuietHours, this)
+                    val notification = createNotification(this)
                     tNotify(this, NOTIFICATION_ID, notification)
                     START_STICKY
                 }
@@ -713,29 +709,39 @@ class QuietHoursNotificationService : Service() {
                 }
 
                 ACTION_SHOW_GALLERY -> {
-                    loadGalleryImages(0, this)
+                    appScope.launch(Dispatchers.IO) {
+                        loadGalleryImages(0, this@QuietHoursNotificationService)
+                    }
                     START_STICKY
                 }
 
                 ACTION_NEXT_GALLERY_IMAGE -> {
-                    showNextGalleryImage(this)
+                    appScope.launch(Dispatchers.IO) {
+                        showNextGalleryImage(this@QuietHoursNotificationService)
+                    }
                     START_STICKY
                 }
 
                 ACTION_PREV_GALLERY_IMAGE -> {
-                    showPreviousGalleryImage(this)
+                    appScope.launch(Dispatchers.IO) {
+                        showPreviousGalleryImage(this@QuietHoursNotificationService)
+                    }
                     START_STICKY
                 }
 
                 ACTION_CONFIRM_DELETE_IMAGE -> {
                     val imageIndex = intent.getIntExtra(EXTRA_IMAGE_INDEX, -1)
-                    if (imageIndex >= 0) showDeleteConfirmation(imageIndex, this)
+                    if (imageIndex >= 0) appScope.launch(Dispatchers.IO) {
+                        showDeleteConfirmation(imageIndex, this@QuietHoursNotificationService)
+                    }
                     START_STICKY
                 }
 
                 ACTION_DELETE_IMAGE -> {
                     val imageIndex = intent.getIntExtra(EXTRA_IMAGE_INDEX, -1)
-                    if (imageIndex >= 0) deleteGalleryImage(imageIndex, this)
+                    if (imageIndex >= 0) appScope.launch(Dispatchers.IO) {
+                        deleteGalleryImage(imageIndex, this@QuietHoursNotificationService)
+                    }
                     START_STICKY
                 }
 
@@ -1281,7 +1287,7 @@ class QuietHoursNotificationService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        val notification = createNotification(isCurrentlyQuietHours, this)
+        val notification = createNotification(this)
         startForeground(NOTIFICATION_ID, notification)
 
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
