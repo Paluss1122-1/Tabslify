@@ -278,7 +278,9 @@ fun createNotificationChannel(context: Context) {
 }
 
 @SuppressLint("LaunchActivityFromNotification")
-fun createNotification(isQuietHours: Boolean, context: Context): Notification {
+fun createNotification(context: Context): Notification {
+    val effectiveQuietHours = isQuietHoursNow(context)
+
     val deleteBase = Intent(ACTION_NOTIFICATION_DISMISSED)
     deleteBase.putExtra("notification_id", NOTIFICATION_ID)
     deleteBase.setPackage(context.packageName)
@@ -289,7 +291,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
 
-    val contentPendingIntent = if (isQuietHours) {
+    val contentPendingIntent = if (effectiveQuietHours) {
         val contentBase = Intent(context, QuietHoursNotificationService::class.java)
         contentBase.action = ACTION_CONTENT_INTENT
         contentBase.setPackage(context.packageName)
@@ -348,7 +350,7 @@ fun createNotification(isQuietHours: Boolean, context: Context): Notification {
         .setGroup("quiet_hours_main_group")
         .setShowWhen(false)
 
-    if (isQuietHours) {
+    if (effectiveQuietHours) {
         builder
             .setContentTitle("🔥 Ready")
 
