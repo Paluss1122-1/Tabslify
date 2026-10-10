@@ -35,7 +35,8 @@ enum class AiTarget {
     MusicSummary,
     Vision,
     SongHashtags,
-    ChargingPrediction
+    ChargingPrediction,
+    TextAction
 }
 
 fun aiSystemPrompt(target: AiTarget): String = when (target) {
@@ -97,6 +98,14 @@ fun aiSystemPrompt(target: AiTarget): String = when (target) {
 
     AiTarget.ChargingPrediction -> """
         You are a battery charge-time prediction engine. Output ONLY a single integer: estimated minutes to reach 85%. No explanation, no units, no text.
+    """.trimIndent()
+
+    AiTarget.TextAction -> """
+        Du bist ein Text-Assistent in einer Android-App. Der Nutzer hat in einer anderen App Text ausgewählt und eine Aktion gewählt. Führe genau diese Aktion aus und antworte direkt mit dem Ergebnis, ohne Vorbemerkung und ohne Rückfragen.
+        Wichtige Hinweise:
+            * Bleib strikt beim Inhalt des übergebenen Textes und erfinde keine Fakten.
+            * Antworte auf Deutsch, knapp und gut lesbar, nutze Markdown für Formatierungen.
+            * Nenne die vom Nutzer verlangte Aktion nicht noch einmal, sondern führe sie aus.
     """.trimIndent()
 }
 
