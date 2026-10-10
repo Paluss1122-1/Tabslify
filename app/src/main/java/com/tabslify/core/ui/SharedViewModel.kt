@@ -39,4 +39,19 @@ class SharedViewModel : ViewModel() {
     fun setPendingAiSession(value: String?) {
         _pendingAiSession.value = value
     }
+
+    private val _pendingAiPrompt = MutableStateFlow<String?>(null)
+    val pendingAiPrompt = _pendingAiPrompt
+
+    private val _appliedAiPrompt = MutableStateFlow<String?>(null)
+    val appliedAiPrompt = _appliedAiPrompt
+
+    fun setPendingAiPrompt(value: String?) {
+        _appliedAiPrompt.value = null
+        _pendingAiPrompt.value = value
+    }
+
+    fun markAiPromptApplied(value: String) {
+        _appliedAiPrompt.value = value
+    }
 }
