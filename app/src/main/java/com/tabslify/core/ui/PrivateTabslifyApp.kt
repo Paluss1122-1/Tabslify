@@ -208,7 +208,6 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.ExperimentalTime
 
 const val KEY_RECENT_TABS = "recent_tabs"
 const val MAX_RECENT_TABS = 5
@@ -946,7 +945,7 @@ fun formatFileSize(sizeBytes: Long): String {
     }
 }
 
-@OptIn(ExperimentalTime::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainTabslifyScreen(storage: Storage) {
     val context = LocalContext.current
@@ -987,6 +986,7 @@ fun MainTabslifyScreen(storage: Storage) {
     }
     var expanded by remember { mutableStateOf(false) }
     var fullscreenImageDialogData by remember { mutableStateOf<Triple<String?, String, Long>?>(null) }
+    var fileToDelete by remember { mutableStateOf<TabslifyFileMeta?>(null) }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     var pendingOtherBucket by remember { mutableStateOf(false) }
@@ -1062,7 +1062,10 @@ fun MainTabslifyScreen(storage: Storage) {
         try {
             val fileName = file.name
             withContext(Dispatchers.IO) {
-                storage.from(Config.SUPABASE_BUCKET).delete(fileName)
+                val paths = storage.from(Config.SUPABASE_BUCKET).list()
+                    .map { it.name }
+                    .filter { it == fileName || it.startsWith("$fileName.part") }
+                storage.from(Config.SUPABASE_BUCKET).delete(paths.ifEmpty { listOf(fileName) })
             }
             FavoriteManager.remove(context, fileName)
             favoriteFiles = favoriteFiles - fileName
@@ -1632,9 +1635,7 @@ fun MainTabslifyScreen(storage: Storage) {
 
                                                         IconButton(
                                                             onClick = {
-                                                                scope.launch {
-                                                                    deleteFile(file)
-                                                                }
+                                                                fileToDelete = file
                                                                 haptic.performHapticFeedback(
                                                                     HapticFeedbackType.LongPress
                                                                 )
@@ -1865,13 +1866,13 @@ fun MainTabslifyScreen(storage: Storage) {
                                                                 withContext(Dispatchers.IO) {
                                                                     FileOutputStream(outputFile).use { fos ->
                                                                         if (chunks.isNotEmpty()) {
-                                                                            for (chunk in chunks) {
+                                                                            for ((name) in chunks) {
                                                                                 val chunkData =
                                                                                     storage.from(
                                                                                         Config.SUPABASE_BUCKET
                                                                                     )
                                                                                         .downloadAuthenticated(
-                                                                                            chunk.name
+                                                                                            name
                                                                                         )
 
                                                                                 fos.write(
@@ -1944,6 +1945,22 @@ fun MainTabslifyScreen(storage: Storage) {
                                                         )
                                                     }
                                                 }
+                                            }
+
+                                            IconButton(
+                                                onClick = {
+                                                    fileToDelete = file
+                                                    haptic.performHapticFeedback(
+                                                        HapticFeedbackType.LongPress
+                                                    )
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = stringResource(R.string.loschen),
+                                                    tint = Color.Red
+                                                )
                                             }
                                         }
                                     }
@@ -2069,6 +2086,19 @@ fun MainTabslifyScreen(storage: Storage) {
                 }
             }
         }
+    }
+
+    fileToDelete?.let { file ->
+        AlertDialogTabslify(
+            onConfirm = {
+                fileToDelete = null
+                scope.launch { deleteFile(file) }
+            },
+            onDismiss = { fileToDelete = null },
+            title = stringResource(R.string.datei_wirklich_loeschen),
+            text = stringResource(R.string.datei_wird_geloescht, file.name),
+            confirmText = stringResource(R.string.loschen)
+        )
     }
 
     fullscreenImageDialogData?.let { (url, name, size) ->
