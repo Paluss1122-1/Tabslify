@@ -54,7 +54,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -889,7 +888,6 @@ private fun DetailField(
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditPasswordDialog(
     initial: PasswordEntry?,
