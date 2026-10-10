@@ -219,6 +219,27 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <activity
+            android:name=".core.activities.ProcessTextActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/tabslify_textaktionen"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Tabslify.ProcessText">
+
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".core.activities.ShareActivity"
             android:excludeFromRecents="true"
             android:exported="true"
