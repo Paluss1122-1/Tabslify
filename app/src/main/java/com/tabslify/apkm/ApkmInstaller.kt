@@ -432,18 +432,18 @@ class ApkmInstaller(private val context: Context) {
             installer.openSession(sessionId).use { session ->
                 ZipFile(pkg.cacheFile).use { zf ->
                     var written = 0L
-                    for (apk in selected) {
-                        val entry = zf.getEntry(apk.entryName)
-                            ?: throw IllegalStateException("Eintrag fehlt: ${apk.entryName}")
-                        val length = if (apk.size > 0) apk.size else entry.size
-                        log("Schreibe ${apk.fileName} (${humanSize(apk.size)})…")
+                    for ((entryName, fileName, size, _, _, _) in selected) {
+                        val entry = zf.getEntry(entryName)
+                            ?: throw IllegalStateException("Eintrag fehlt: $entryName")
+                        val length = if (size > 0) size else entry.size
+                        log("Schreibe $fileName (${humanSize(size)})…")
                         zf.getInputStream(entry).use { input ->
-                            session.openWrite(safeName(apk.fileName), 0, length).use { out ->
+                            session.openWrite(safeName(fileName), 0, length).use { out ->
                                 input.copyTo(out, 1 shl 16)
                                 session.fsync(out)
                             }
                         }
-                        written += apk.size
+                        written += size
                     }
                     log("Alle APKs geschrieben (${humanSize(written)}). Committe…")
                 }
