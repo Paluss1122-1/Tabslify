@@ -4,7 +4,6 @@ import android.app.NotificationManager
 import android.content.Context
 import android.text.Html
 import android.widget.Toast
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -403,7 +402,6 @@ fun EmailList(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EmailRow(email: EmailItem, onClick: () -> Unit, onLongClick: () -> Unit) {
     Column(
