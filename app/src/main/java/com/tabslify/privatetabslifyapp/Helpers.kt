@@ -54,7 +54,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.tabslify.core.objects.Config
-import io.github.jan.supabase.annotations.SupabaseExperimental
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -79,7 +78,6 @@ fun fileExistsLocallyWithSameSize(fileName: String, remoteSize: Long): Boolean {
     return dcimFile.exists() && dcimFile.length() == remoteSize
 }
 
-@OptIn(SupabaseExperimental::class)
 @Composable
 fun FileIcon(
     fileName: String,
