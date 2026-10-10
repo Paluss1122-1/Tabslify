@@ -32,7 +32,6 @@ import com.tabslify.services.QuietHoursNotificationService.Companion.EXTRA_IMAGE
 import com.tabslify.services.QuietHoursNotificationService.Companion.GALLERY_CHANNEL_ID
 import com.tabslify.services.QuietHoursNotificationService.Companion.currentGalleryIndex
 import com.tabslify.services.QuietHoursNotificationService.Companion.galleryImages
-import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
@@ -49,7 +48,6 @@ data class GalleryImage(
     val displayName: String? = null
 )
 
-@OptIn(DelicateCoroutinesApi::class)
 fun uploadCurrentGalleryImageToSupabase(date: String, imageName: String?, context: Context) {
     serviceScope.launch(Dispatchers.IO) {
         try {
