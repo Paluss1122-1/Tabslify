@@ -2711,15 +2711,24 @@ class MediaPlayerService : MediaSessionService() {
         override fun getCurrentTimeline(): Timeline = Timeline.EMPTY
         override fun getCurrentPeriodIndex() = 0
 
-        @Deprecated("Deprecated in Java")
+        @Deprecated(
+            "Deprecated in Java",
+            ReplaceWith("getCurrentMediaItemIndex()")
+        )
         override fun getCurrentWindowIndex() = 0
         override fun getCurrentMediaItemIndex() = 0
 
-        @Deprecated("Deprecated in Java")
+        @Deprecated(
+            "Deprecated in Java",
+            ReplaceWith("getNextMediaItemIndex()")
+        )
         override fun getNextWindowIndex() = 0
         override fun getNextMediaItemIndex() = 0
 
-        @Deprecated("Deprecated in Java")
+        @Deprecated(
+            "Deprecated in Java",
+            ReplaceWith("getPreviousMediaItemIndex()")
+        )
         override fun getPreviousWindowIndex() = 0
         override fun getPreviousMediaItemIndex() = 0
         override fun getCurrentMediaItem(): MediaItem? = null
@@ -2731,16 +2740,25 @@ class MediaPlayerService : MediaSessionService() {
         override fun getBufferedPercentage() = 0
         override fun getTotalBufferedDuration() = 0L
 
-        @Deprecated("Deprecated in Java")
+        @Deprecated(
+            "Deprecated in Java",
+            ReplaceWith("isCurrentMediaItemDynamic()")
+        )
         override fun isCurrentWindowDynamic() = false
         override fun isCurrentMediaItemDynamic() = false
 
-        @Deprecated("Deprecated in Java")
+        @Deprecated(
+            "Deprecated in Java",
+            ReplaceWith("isCurrentMediaItemLive()")
+        )
         override fun isCurrentWindowLive() = false
         override fun isCurrentMediaItemLive() = false
         override fun getCurrentLiveOffset() = 0L
 
-        @Deprecated("Deprecated in Java")
+        @Deprecated(
+            "Deprecated in Java",
+            ReplaceWith("isCurrentMediaItemSeekable()")
+        )
         override fun isCurrentWindowSeekable() = false
         override fun isCurrentMediaItemSeekable() = false
         override fun isPlayingAd() = false
