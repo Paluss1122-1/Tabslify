@@ -488,8 +488,7 @@ suspend fun applySyncConflictDecision(
     passwordDb: PasswordDatabase,
     twoFaDb: TwoFADatabase
 ): Boolean {
-    if (!prvt()) return false
-    return withContext(Dispatchers.IO) {
+    return prvt() && withContext(Dispatchers.IO) {
         try {
             when (conflict.type) {
                 SyncConflictType.CLOUD_ONLY_ENTRY -> {
