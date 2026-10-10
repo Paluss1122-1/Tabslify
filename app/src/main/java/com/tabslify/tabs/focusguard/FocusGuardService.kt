@@ -20,7 +20,6 @@ import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
@@ -353,18 +352,6 @@ class FocusGuardService : Service() {
         const val ACTION_STOP = "com.tabslify.ACTION_FOCUSGUARD_STOP"
         private const val POLL_ACTIVE_MS = 10_000L
         private const val POLL_IDLE_MS = 60_000L
-
-        fun startService(context: Context) {
-            val intent = Intent(context, FocusGuardService::class.java)
-            try {
-                ContextCompat.startForegroundService(context, intent)
-            } catch (_: Exception) {
-                try {
-                    context.startService(intent)
-                } catch (_: Exception) {
-                }
-            }
-        }
 
         fun stopService(context: Context) {
             val intent = Intent(context, FocusGuardService::class.java).apply {
