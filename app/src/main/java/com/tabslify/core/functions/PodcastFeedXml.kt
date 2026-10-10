@@ -1,6 +1,7 @@
 package com.tabslify.core.functions
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Environment
 import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
@@ -44,13 +45,13 @@ private const val MAX_ITEMS = 200
 
 private val PODCAST_CHECK_TTL_MS = 6.hours.inWholeMilliseconds
 
-fun podcastCheckPrefs(context: Context) =
+fun podcastCheckPrefs(context: Context): SharedPreferences =
     context.getSharedPreferences(PODCAST_CHECK_PREFS, Context.MODE_PRIVATE)
 
-fun podcastFavPrefs(context: Context) =
+fun podcastFavPrefs(context: Context): SharedPreferences =
     context.getSharedPreferences(PODCAST_FAVS_PREFS, Context.MODE_PRIVATE)
 
-fun podcastDownloadPrefs(context: Context) =
+fun podcastDownloadPrefs(context: Context): SharedPreferences =
     context.getSharedPreferences(PODCAST_DOWNLOAD_PREFS, Context.MODE_PRIVATE)
 
 @Suppress("DEPRECATION")
@@ -186,8 +187,7 @@ suspend fun fetchPodcastFeed(feedUrl: String): Document = withContext(Dispatcher
         conn.instanceFollowRedirects = true
         val code = conn.responseCode
         if (code in 300..399 && redirects < MAX_REDIRECTS) {
-            val location = conn.getHeaderField("Location")
-            if (location == null) break
+            val location = conn.getHeaderField("Location") ?: break
             conn.disconnect()
             url = URL(url, location)
             redirects++
@@ -282,16 +282,16 @@ suspend fun runPodcastCheck(context: Context): List<JSONObject> {
                     val feedTitle = o.optString("title")
                     val feedUrl = o.optString("feedUrl")
                     if (feedUrl.isEmpty()) return@async feedFound
-                    for (ep in readPodcastEpisodes(fetchPodcastFeed(feedUrl))) {
-                        if (ep.publishedAt <= threshold) continue
-                        if (isPodcastEpisodeDownloaded(context, ep.audioUrl)) continue
-                        if (File(destDir, podcastEpisodeFileName(ep.title)).exists()) continue
+                    for ((title, audioUrl, publishedAt) in readPodcastEpisodes(fetchPodcastFeed(feedUrl))) {
+                        if (publishedAt <= threshold) continue
+                        if (isPodcastEpisodeDownloaded(context, audioUrl)) continue
+                        if (File(destDir, podcastEpisodeFileName(title)).exists()) continue
                         feedFound.add(
                             JSONObject().apply {
-                                put("audioUrl", ep.audioUrl)
-                                put("title", ep.title)
+                                put("audioUrl", audioUrl)
+                                put("title", title)
                                 put("showName", feedTitle)
-                                put("publishedAt", ep.publishedAt)
+                                put("publishedAt", publishedAt)
                             }
                         )
                     }
