@@ -116,9 +116,7 @@
     <string name="tabslify_login">Tabslify Login</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:650 -->
     <string name="invalid_credentials">Invalid Credentials</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:679 -->
     <string name="anmelden">Anmelden</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:699 -->
-    <string name="open_notification_frame">Open notification frame</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:830 -->
     <string name="open_settings_frame">Open settings frame</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:838 -->
-    <string name="keine_benachrichtigungen">Keine Benachrichtigungen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:852 -->
     <string name="zuletzt_verwendet">Zuletzt verwendet</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:876 -->
     <string name="alle_tabs">Alle Tabs</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:898 -->
     <string name="mediaplayerservice_tab_songs_podcasts_abspielen">MediaPlayerService &amp; Tab: Songs &amp; Podcasts abspielen</string> <!-- app/src/main/java/com/tabslify/core/ui/LandingPage.kt:1009 -->
@@ -1383,7 +1381,6 @@
     <string name="rdp_benutzername">Benutzername (Domäne leer lassen)</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1029 -->
     <string name="rdp_passwort">RDP-Passwort</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1036 -->
     <string name="rdp_passwort_merken">Passwort merken</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1044 -->
-    <string name="rdp_zurueck">Abbrechen und App schließen</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:1061 -->
     <string name="rdp_verbinde">Verbindung zu %1$s wird aufgebaut…</string> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:948  ||  %1$s=current.ip --> <!-- app/src/main/java/com/tabslify/tabs/RemoteDesktopTab.kt:949 | RemoteDesktopTab.kt:1012 -->
     <string name="rdp_hinweis_nativ">Direktes RDP aus der App, ohne zusätzlichen Dienst auf dem Rechner. Wie die Windows-App.</string>
     <string name="rdp_fehler_angaben">Bitte Rechner, Benutzer und Passwort angeben.</string>
@@ -1410,7 +1407,6 @@
     <string name="ubermorgen_2">Übermorgen</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:954 -->
     <string name="tag_2">Tag %1$d</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:955  ||  %1$s=index + 1 -->
     <string name="stunden_fur">Stunden für %1$s</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:963  ||  %1$s=day.date -->
-    <string name="jetzt">jetzt</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1042 -->
     <string name="luftfeuchtigkeit">Luftfeuchtigkeit</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1074 -->
     <string name="wind">Wind</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1080 -->
     <string name="luftdruck">Luftdruck</string> <!-- app/src/main/java/com/tabslify/tabs/WeatherTab.kt:1081 -->
@@ -1556,7 +1552,7 @@
     <string name="sync_totp_cloud_loschen">Cloud-2FA entfernen</string>
     <string name="sync_totp_lokal_ubernehmen">Lokales 2FA übernehmen</string>
     <string name="sync_konflikt_password_different">Passwort in Cloud und lokal unterscheiden sich.</string>
-    <string name="sync_entschluesselung_fehlgeschlagen">%1$d Einträge konnten nicht entschlüsselt werden – Master-Passwort prüfen</string>
+    <string name="sync_entschluesselung_fehlgeschlagen" tools:ignore="PluralsCandidate">%1$d Einträge konnten nicht entschlüsselt werden – Master-Passwort prüfen</string>
     <string name="sync_diagnose_titel">Sync-Diagnose</string>
     <string name="sync_diagnose_geraet">Gerät</string>
     <string name="sync_diagnose_echtes_geraet">Echtes Gerät</string>
@@ -1678,7 +1674,6 @@
     <string name="modus_unbekannt">Unbekannt</string>
     <string name="modus_aufenthalt">Aufenthalt</string>
     <string name="aktivitaet">Aktivität</string>
-    <string name="explore_export">📤 Export</string>
     <string name="explore_export_tag">Tag</string>
     <string name="explore_export_7_tage">7 Tage</string>
     <string name="explore_export_laeuft">Export läuft…</string>
@@ -1879,8 +1874,6 @@
         <item quantity="one">%1$d Note</item>
         <item quantity="other">%1$d Noten</item>
     </plurals>
-    <string name="ai_chat">AI Chat</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:593 -->
-    <string name="unterstutzung_beim_lernen">Unterstützung beim Lernen</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:599 -->
     <string name="set_loschen">Set löschen?</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:634 -->
     <string name="wird_geloscht">\"%1$s\" wird gelöscht.</string> <!-- app/src/main/java/com/tabslify/tabs/school/VocabTab.kt:635  ||  %1$s=setToDelete!!.name -->
     <string name="vokabel_loeschen">Vokabel löschen?</string>
@@ -1949,7 +1942,7 @@
     <string name="alle_faellig">Fällige Vokabeln</string> <!-- VocabTab.kt:1899 -->
     <string name="alles_gelernt">Alles gelernt, nichts mehr fällig</string> <!-- VocabTab.kt:745 -->
     <string name="sitzende_vokabeln" tools:ignore="PluralsCandidate">%1$d von %2$d sitzen</string> <!-- VocabTab.kt:926  ||  %1$d=sitzt, %2$d=set.vokabeln.size -->
-    <string name="faellig_kurz">%1$d fällig</string> <!-- VocabTab.kt:934  ||  %1$d=faellig -->
+    <string name="faellig_kurz" tools:ignore="PluralsCandidate">%1$d fällig</string> <!-- VocabTab.kt:934  ||  %1$d=faellig -->
     <string name="letzte_sitzung">Zuletzt %1$s</string> <!-- VocabTab.kt:943  ||  %1$s=dd.MM. -->
     <string name="nur_schwache">Nur schwache (%1$d)</string> <!-- VocabTab.kt:1011  ||  %1$d=weakCount -->
     <string name="modus_auswahl">4 Antworten</string> <!-- VocabTab.kt:1938 -->
@@ -3053,4 +3046,25 @@
     <string name="bluetooth_noch_an">Bluetooth ist noch an</string>
     <string name="bluetooth_noch_an_text">%1$s wird nicht mehr gebraucht - Bluetooth kann wieder aus</string>
     <string name="bluetooth_ausschalten">Ausschalten</string>
+    <string name="datei_wirklich_loeschen">Datei wirklich löschen?</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:2099 -->
+    <string name="datei_wird_geloescht">\"%1$s\" wird aus der Cloud gelöscht. Das kann nicht rückgängig gemacht werden.</string> <!-- app/src/main/java/com/tabslify/core/ui/PrivateTabslifyApp.kt:2100  ||  %1$s=file.name -->
+
+    <string name="tabslify_textaktionen">Tabslify KI</string>
+    <string name="textaktion_zusammenfassen">Zusammenfassen</string>
+    <string name="textaktion_erklaeren">Erklären</string>
+    <string name="textaktion_uebersetzen">Übersetzen</string>
+    <string name="textaktion_korrigieren">Korrigieren</string>
+    <string name="textaktion_eigener_prompt">Eigene Aktion</string>
+    <string name="textaktion_eigenes_feld">Eigener Prompt (z. B. \"Erkläre wie ein Fünfjähriger\")</string>
+    <string name="textaktion_starten">Ausführen</string>
+    <string name="textaktion_kein_text">Kein Text zum Bearbeiten gefunden.</string>
+    <string name="textaktion_gekuerzt" tools:ignore="PluralsCandidate">Angezeigter Text wurde auf %1$d Zeichen gekürzt.</string>
+    <string name="textaktion_nur_lesen">Nur-Lese-Feld</string>
+    <string name="textaktion_limit_erreicht">Tageslimit erreicht. Zurücksetzen: %1$s</string>
+    <string name="textaktion_auswahl">Was soll mit dem Text passieren?</string>
+    <string name="textaktion_eigenes_feld_fehlt">Bitte zuerst einen Prompt eingeben.</string>
+    <string name="textaktion_neue_aktion_waehlen">Neue Aktion wählen</string>
+    <string name="textaktion_denkt">Denkt nach…</string>
+    <string name="im_chat_oeffnen">Im AI-Chat öffnen</string>
+    <string name="chat_geoeffnet">Wird im AI-Chat geöffnet</string>
 </resources>
