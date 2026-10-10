@@ -13,10 +13,6 @@ import java.util.concurrent.ConcurrentHashMap
 object PcCommands {
 
     const val LAMP_OFF = "lamp_off"
-    const val LAMP_ON = "lamp_on"
-    const val LAMP_TOGGLE = "lamp_toggle"
-    const val LAMP_BRIGHTNESS = "lamp_brightness"
-    const val LAMP_STATE = "lamp_state"
 
     private const val RESEND_COOLDOWN_MS = 15 * 60_000L
 
