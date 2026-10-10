@@ -25,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -98,6 +97,7 @@ import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.io.File
 import java.time.Instant
+import kotlin.time.Duration.Companion.milliseconds
 
 data class PodcastFeed(
     val title: String,
@@ -142,8 +142,8 @@ private fun deletePodcastMedia(context: Context, fileName: String): Boolean {
             deleted
         } ?: false
     }.getOrDefault(false)
-    if (viaMediaStore) return true
-    return runCatching { File(podcastDestDir(), fileName).delete() }.getOrDefault(false)
+    return viaMediaStore ||
+            runCatching { File(podcastDestDir(), fileName).delete() }.getOrDefault(false)
 }
 
 private suspend fun queryPodcastDownloadProgress(
@@ -182,7 +182,6 @@ private suspend fun queryPodcastDownloadProgress(
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PodcastTab() {
     val context = LocalContext.current
@@ -247,7 +246,7 @@ fun PodcastTab() {
     var downloadedFiles by remember { mutableStateOf<Set<String>>(emptySet()) }
     var activeDownloads by remember { mutableStateOf<Map<String, PodcastDownloadProgress>>(emptyMap()) }
     var completedKeys by remember {
-        mutableStateOf<Set<String>>(loadPodcastCompletions(context.applicationContext).keys)
+        mutableStateOf(loadPodcastCompletions(context.applicationContext).keys)
     }
     val pendingDownloadIds = remember { mutableStateMapOf<Long, String>() }
 
@@ -304,7 +303,7 @@ fun PodcastTab() {
                 loadDownloaded()
             }
             if (pendingDownloadIds.isEmpty()) break
-            delay(600)
+            delay(600.milliseconds)
         }
         activeDownloads = emptyMap()
     }
@@ -584,7 +583,7 @@ fun PodcastTab() {
         )
 
         error?.let {
-            if (!hasSearched && !query.isNotBlank()) {
+            if (!hasSearched && query.isBlank()) {
                 Text(
                     stringResource(R.string.fehler_msg, it),
                     color = MaterialTheme.colorScheme.error,
