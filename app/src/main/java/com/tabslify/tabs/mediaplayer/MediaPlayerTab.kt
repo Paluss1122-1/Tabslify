@@ -26,7 +26,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -177,7 +176,6 @@ fun formatMsMTB(ms: Long): String {
     return "%d:%02d".format(m, s)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaTab(viewModel: MediaViewModel = viewModel(), onBack: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
@@ -515,7 +513,6 @@ private fun MediaBottomBar(currentTab: MediaTab, onTabSelected: (MediaTab) -> Un
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeTab(
     modifier: Modifier = Modifier,
@@ -1232,7 +1229,6 @@ private fun LibraryTab(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MusicTab(
     modifier: Modifier,
@@ -1591,7 +1587,7 @@ private fun MusicTab(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreatePlaylistBottomSheet(
     allSongs: List<MediaPlayerService.Song>,
@@ -2023,7 +2019,6 @@ private fun AlgorithmicPlaylistCard(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SongRow(
     song: MediaPlayerService.Song,
@@ -2072,7 +2067,6 @@ private fun SongRow(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PodcastEpisodeRow(
     episode: PodcastEpisode,
@@ -3170,8 +3164,8 @@ object MediaAnalyticsManager {
     fun isSamePlayback(a: ListenSession, b: ListenSession): Boolean {
         if (!isSpotifySource(a.source) || !isSpotifySource(b.source)) return false
         val normalizedA = normalizeLabel(a.label)
-        if (normalizedA.isEmpty() || normalizedA != normalizeLabel(b.label)) return false
-        return kotlin.math.abs(a.startedAt - b.startedAt) < SAME_PLAYBACK_WINDOW_MS
+        return !(normalizedA.isEmpty() || normalizedA != normalizeLabel(b.label)) &&
+                kotlin.math.abs(a.startedAt - b.startedAt) < SAME_PLAYBACK_WINDOW_MS
     }
 
     fun mergedPlayback(existing: ListenSession, incoming: ListenSession): ListenSession {
@@ -4011,10 +4005,10 @@ object PodcastShowManager {
         extraPatterns.forEach { (pattern, showId) ->
             if (combined.contains(pattern)) return showId
         }
-        for (show in shows) {
-            if (show.id == "unassigned") continue
-            for (pattern in show.matchPatterns) {
-                if (combined.contains(pattern.lowercase())) return show.id
+        for ((id, _, _, matchPatterns, _, _) in shows) {
+            if (id == "unassigned") continue
+            for (pattern in matchPatterns) {
+                if (combined.contains(pattern.lowercase())) return id
             }
         }
         return "unassigned"
