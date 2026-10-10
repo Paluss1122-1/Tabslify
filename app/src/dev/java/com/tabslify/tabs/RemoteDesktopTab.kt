@@ -74,9 +74,10 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -92,10 +93,10 @@ import com.tabslify.core.ui.BgCard
 import com.tabslify.core.ui.TextPrimary
 import com.tabslify.core.ui.TextSecondary
 import com.tabslify.core.ui.TextTertiary
-import uniffi.ironrdp_bridge.ConnectOptions
-import uniffi.ironrdp_bridge.MouseButton
-import uniffi.ironrdp_bridge.RdpSession
-import uniffi.ironrdp_bridge.SessionState
+import com.tabslify.remote.uniffi.ironrdp_bridge.ConnectOptions
+import com.tabslify.remote.uniffi.ironrdp_bridge.MouseButton
+import com.tabslify.remote.uniffi.ironrdp_bridge.RdpSession
+import com.tabslify.remote.uniffi.ironrdp_bridge.SessionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -233,7 +234,6 @@ private fun tastenInfo(keyCode: Int): TastenInfo? = when (keyCode) {
     KeyEvent.KEYCODE_PAGE_DOWN -> TastenInfo(0x51, true)
     KeyEvent.KEYCODE_INSERT -> TastenInfo(0x52, true)
     KeyEvent.KEYCODE_NUMPAD_DOT -> TastenInfo(0x52, true)
-    KeyEvent.KEYCODE_DEL -> TastenInfo(0x53, true)
     KeyEvent.KEYCODE_F11 -> TastenInfo(0x57, true)
     KeyEvent.KEYCODE_F12 -> TastenInfo(0x58, true)
     KeyEvent.KEYCODE_NUMPAD_ADD -> TastenInfo(0x4E, false)
@@ -271,7 +271,11 @@ fun RemoteDesktopTabContent() {
     var letzteOptionen by remember { mutableStateOf<ConnectOptions?>(null) }
     var neuverbindungen by remember { mutableIntStateOf(0) }
     val wifiDienst = remember { kontext.getSystemService(Context.WIFI_SERVICE) as? WifiManager }
-    val konfiguration = LocalConfiguration.current
+    val fensterGroesse = LocalWindowInfo.current.containerSize
+    val dichte = LocalDensity.current.density
+    val fehlerAngaben = stringResource(R.string.rdp_fehler_angaben)
+    val verbindenText = stringResource(R.string.verbinden)
+    val neuverbindenFehlgeschlagen = stringResource(R.string.rdp_neuverbinden_fehlgeschlagen)
 
     DisposableEffect(verbindung) {
         val aktuelleVerbindung = verbindung
@@ -357,7 +361,7 @@ fun RemoteDesktopTabContent() {
                         onClick = {
                             meldung = null
                             if (ip.isBlank() || benutzer.isBlank() || passwort.isEmpty()) {
-                                meldung = kontext.getString(R.string.rdp_fehler_angaben)
+                                meldung = fehlerAngaben
                                 return@Button
                             }
                             daten.edit {
@@ -366,8 +370,10 @@ fun RemoteDesktopTabContent() {
                                     .putBoolean("merken", merken)
                                     .putString("passwort", if (merken) passwort else "")
                             }
-                            val breite = (konfiguration.screenWidthDp * 2).coerceIn(800, 3840)
-                            val hoehe = (breite * konfiguration.screenHeightDp.toFloat() / konfiguration.screenWidthDp.toFloat())
+                            val breiteDp = (fensterGroesse.width / dichte).roundToInt()
+                            val hoeheDp = (fensterGroesse.height / dichte).roundToInt()
+                            val breite = (breiteDp * 2).coerceIn(800, 3840)
+                            val hoehe = (breite * hoeheDp.toFloat() / breiteDp.toFloat())
                                 .roundToInt()
                                 .coerceIn(600, 2160)
                             val optionen = ConnectOptions(
@@ -383,7 +389,7 @@ fun RemoteDesktopTabContent() {
                             Log.i(
                                 TAG,
                                 "[RDP] Verbindungsversuch " +
-                                    "${kontext.getString(R.string.verbinden)}: " +
+                                    "$verbindenText: " +
                                     "${optionen.host}:${optionen.port} als ${optionen.username}, " +
                                     "${optionen.width}x${optionen.height}"
                             )
@@ -392,7 +398,7 @@ fun RemoteDesktopTabContent() {
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = AccentViolet)
                     ) {
-                        Text(stringResource(R.string.verbinden), color = TextPrimary)
+                        Text(verbindenText, color = TextPrimary)
                     }
                 }
             }
@@ -430,7 +436,7 @@ fun RemoteDesktopTabContent() {
             } else {
                 Log.w(TAG, "[RDP] Neuaufbau aufgegeben, Meldung anzeigen")
                 verbindung = null
-                meldung = kontext.getString(R.string.rdp_neuverbinden_fehlgeschlagen)
+                meldung = neuverbindenFehlgeschlagen
             }
         }
     )
@@ -471,7 +477,6 @@ private fun Bildschirm(
     }
 
     LaunchedEffect(verbindung) {
-        var diagnoseZeit = System.currentTimeMillis()
         while (isActive && verbindung.aktiv) {
             val aufrufStart = System.currentTimeMillis()
             val aktualisierung = runCatching { sitzung.takeFrame() }.getOrNull()
@@ -485,23 +490,23 @@ private fun Bildschirm(
                                 it.height == aktualisierung.height.toInt()
                         }
                         ?: createBitmap(aktualisierung.width.toInt(), aktualisierung.height.toInt())
-                    for (region in aktualisierung.regions) {
-                        val breite = region.width.toInt()
-                        val hoehe = region.height.toInt()
-                        val startX = region.x.toInt()
-                        val startY = region.y.toInt()
-                        if (region.argb.isEmpty()) {
+                    for ((x, y, regionBreite, regionHoehe, argb) in aktualisierung.regions) {
+                        val breite = regionBreite.toInt()
+                        val hoehe = regionHoehe.toInt()
+                        val startX = x.toInt()
+                        val startY = y.toInt()
+                        if (argb.isEmpty()) {
                             puffer.eraseColor(android.graphics.Color.BLACK)
                             continue
                         }
                         if (breite <= 0 || hoehe <= 0 || startX < 0 || startY < 0 ||
                             startX + breite > puffer.width || startY + hoehe > puffer.height ||
-                            region.argb.size < breite * hoehe * 4
+                            argb.size < breite * hoehe * 4
                         ) {
                             continue
                         }
                         val pixel = pixelPuffer.fuer(breite * hoehe)
-                        java.nio.ByteBuffer.wrap(region.argb).asIntBuffer().get(pixel)
+                        java.nio.ByteBuffer.wrap(argb).asIntBuffer().get(pixel)
                         puffer.setPixels(
                             pixel,
                             0,
@@ -550,7 +555,7 @@ private fun Bildschirm(
                 }
             }
             if (neuerZustand == SessionState.DISCONNECTED && verbindung.aktiv) {
-                delay(NEUVERBINDUNG_PAUSE_MS)
+                delay(NEUVERBINDUNG_PAUSE_MS.milliseconds)
                 val stand = runCatching { sitzung.state() }.getOrNull()
                 when {
                     !verbindung.aktiv -> {
@@ -867,8 +872,8 @@ private suspend fun PointerInputScope.eingabeVerarbeiten(
         var letzterX = start.position.x
         var letzterY = start.position.y
         var scrollBezug: Pair<Float, Float>? = null
-        var klickX = 0f
-        var klickY = 0f
+        val klickX = 0f
+        val klickY = 0f
         val startZeit = System.currentTimeMillis()
         var gemeldetX = start.position.x
         var gemeldetY = start.position.y
@@ -887,9 +892,6 @@ private suspend fun PointerInputScope.eingabeVerarbeiten(
                     if (doppelt) {
                         sitzung.pointerButton(MouseButton.LEFT, true)
                         sitzung.pointerButton(MouseButton.LEFT, false)
-                    } else {
-                        klickX = start.position.x
-                        klickY = start.position.y
                     }
                 }
                 if (hinunter) {
