@@ -40,6 +40,57 @@ import kotlin.time.Duration.Companion.milliseconds
 
 const val DAILY_LIMIT = 30
 private const val USAGE_RESET_MS = 6 * 60 * 60 * 1000L
+private const val USAGE_PREFS = "ai_usage"
+private const val USAGE_KEY_COUNT = "usage_count"
+private const val USAGE_KEY_RESET_AT = "usage_reset_at"
+private const val TOKEN_THROTTLE_MS = 33L
+
+data class AiUsage(
+    val count: Int,
+    val resetAt: Long,
+    val remainingHours: Int,
+    val remainingMinutes: Int
+)
+
+fun readAiUsage(ctx: Context): AiUsage {
+    val prefs = ctx.getSharedPreferences(USAGE_PREFS, MODE_PRIVATE)
+    val now = System.currentTimeMillis()
+    val savedResetAt = prefs.getLong(USAGE_KEY_RESET_AT, 0L)
+    val shouldReset = savedResetAt == 0L || now - savedResetAt >= USAGE_RESET_MS
+    val resetAt = if (shouldReset) now else savedResetAt
+    val count = if (shouldReset) 0 else prefs.getInt(USAGE_KEY_COUNT, 0)
+    val remaining = resetAt + USAGE_RESET_MS - now
+    return AiUsage(
+        count = count,
+        resetAt = resetAt,
+        remainingHours = if (remaining <= 0) 0 else (remaining / 3_600_000).toInt(),
+        remainingMinutes = if (remaining <= 0) 0 else ((remaining % 3_600_000) / 60_000).toInt()
+    )
+}
+
+fun writeAiUsage(ctx: Context, count: Int, resetAt: Long) {
+    ctx.getSharedPreferences(USAGE_PREFS, MODE_PRIVATE).edit {
+        putInt(USAGE_KEY_COUNT, count)
+        putLong(USAGE_KEY_RESET_AT, resetAt)
+    }
+}
+
+fun aiUsageText(ctx: Context, usage: AiUsage): String {
+    if (usage.remainingHours <= 0 && usage.remainingMinutes <= 0) {
+        return ctx.getString(R.string.wird_gleich_zuruckgesetzt)
+    }
+    val resetTime = Calendar.getInstance().apply { timeInMillis = usage.resetAt + USAGE_RESET_MS }
+    val hh = resetTime.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+    val mm = resetTime.get(Calendar.MINUTE).toString().padStart(2, '0')
+    return ctx.getString(R.string.reset_um_h_m, hh, mm, usage.remainingHours, usage.remainingMinutes)
+}
+
+fun reserveAiUsage(ctx: Context, weight: Int): Boolean {
+    val usage = readAiUsage(ctx)
+    if (usage.count + weight > DAILY_LIMIT) return false
+    writeAiUsage(ctx, usage.count + weight, usage.resetAt)
+    return true
+}
 
 @Serializable
 data class ChatMessage(
@@ -62,6 +113,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
     var selectedMsg: Int? by mutableStateOf(null)
     var lastSelectedMsg: Int? by mutableStateOf(null)
     val history = mutableStateListOf<ChatMessage>()
+    var streamSeq by mutableLongStateOf(0L)
 
     val availableModels
         get() = when (currentMode) {
@@ -97,48 +149,19 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun updateTodayUsage(count: Int) {
         todayUsage = count
-        setStoredUsage(count, usageResetAt)
-    }
-
-    private fun setStoredUsage(count: Int, resetAt: Long) {
-        val ctx = getApplication<Application>()
-        val prefs = ctx.getSharedPreferences("ai_usage", MODE_PRIVATE)
-        prefs.edit {
-            putInt("usage_count", count)
-            putLong("usage_reset_at", resetAt)
-        }
+        writeAiUsage(getApplication(), count, usageResetAt)
     }
 
     fun checkUsageResetIfNeeded(ctx: Context) {
-        val prefs = ctx.getSharedPreferences("ai_usage", MODE_PRIVATE)
-        val now = System.currentTimeMillis()
-        val savedResetAt = prefs.getLong("usage_reset_at", 0L)
-        val shouldReset = savedResetAt == 0L || now - savedResetAt >= USAGE_RESET_MS
-
-        if (shouldReset) {
-            usageResetAt = now
-            todayUsage = 0
-            setStoredUsage(0, now)
-        } else {
-            usageResetAt = savedResetAt
-            todayUsage = prefs.getInt("usage_count", 0)
-        }
+        val usage = readAiUsage(ctx)
+        usageResetAt = usage.resetAt
+        todayUsage = usage.count
+        writeAiUsage(ctx, usage.count, usage.resetAt)
     }
 
     fun getUsageProgress(): Float = (todayUsage.toFloat() / DAILY_LIMIT).coerceIn(0f, 1f)
 
-    fun getUsageResetText(): String {
-        val now = System.currentTimeMillis()
-        val target = usageResetAt + USAGE_RESET_MS
-        if (target <= now) return getApplication<Application>().getString(R.string.wird_gleich_zuruckgesetzt)
-        val remaining = target - now
-        val hours = remaining / 3_600_000
-        val minutes = (remaining % 3_600_000) / 60_000
-        val resetTime = Calendar.getInstance().apply { timeInMillis = target }
-        val hh = resetTime.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
-        val mm = resetTime.get(Calendar.MINUTE).toString().padStart(2, '0')
-        return getApplication<Application>().getString(R.string.reset_um_h_m, hh, mm, hours, minutes)
-    }
+    fun getUsageResetText(): String = aiUsageText(getApplication(), readAiUsage(getApplication()))
 
     fun setMode(mode: String) {
         if (currentMode == mode) return
@@ -200,14 +223,22 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
         history.add(ChatMessage("", placeholderTs, false, modeAtSend))
         val placeholderIndex = history.lastIndex
 
+        val buffer = StringBuilder()
+        var lastFlushMs = 0L
+
         val onToken: (String) -> Unit = { delta ->
-            val current = history.getOrNull(placeholderIndex)?.text ?: ""
-            history[placeholderIndex] = ChatMessage(
-                text = current + delta,
-                ts = placeholderTs,
-                own = false,
-                mode = modeAtSend
-            )
+            buffer.append(delta)
+            val now = System.currentTimeMillis()
+            if (now - lastFlushMs >= TOKEN_THROTTLE_MS) {
+                lastFlushMs = now
+                history[placeholderIndex] = ChatMessage(
+                    text = buffer.toString(),
+                    ts = placeholderTs,
+                    own = false,
+                    mode = modeAtSend
+                )
+                streamSeq = System.nanoTime()
+            }
         }
 
         viewModelScope.launch {
@@ -226,7 +257,7 @@ class AITabViewModel(application: Application) : AndroidViewModel(application) {
                 selectedImageUri = null
                 selectedAudioUri = null
 
-                if (placeholderIndex < history.size && history[placeholderIndex].text.isBlank()) {
+                if (placeholderIndex < history.size) {
                     history[placeholderIndex] = ChatMessage(
                         text = response.ifBlank { ctx.getString(R.string.fehler) },
                         ts = placeholderTs,
