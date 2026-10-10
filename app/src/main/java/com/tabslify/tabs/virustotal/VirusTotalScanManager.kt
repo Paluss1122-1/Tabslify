@@ -181,16 +181,16 @@ object VirusTotalScanManager {
         }
         val recentJobs = _jobs.value.sortedByDescending { it.startedAt }
 
-        for (job in recentJobs) {
+        for ((id, mode, label, target, state, startedAt, finishedAt, _) in recentJobs) {
             val jsonObj = JSONObject().apply {
-                put("id", job.id)
-                put("mode", job.mode.name)
-                put("label", job.label)
-                put("target", job.target)
-                put("startedAt", job.startedAt)
-                put("finishedAt", job.finishedAt)
+                put("id", id)
+                put("mode", mode.name)
+                put("label", label)
+                put("target", target)
+                put("startedAt", startedAt)
+                put("finishedAt", finishedAt)
 
-                when (val state = job.state) {
+                when (state) {
                     is VirusTotalState.Loading -> {
                         put("type", "loading")
                     }
