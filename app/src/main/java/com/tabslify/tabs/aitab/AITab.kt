@@ -57,8 +57,9 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -97,6 +98,7 @@ import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import com.tabslify.R
+import com.tabslify.core.objects.Config
 import com.tabslify.core.objects.prvt
 import com.tabslify.core.ui.AlertDialogTabslify
 import com.tabslify.core.ui.BgSurface
@@ -169,10 +171,9 @@ fun AITabContent(
         )
     )
 
-    val msgBounds = remember { mutableStateMapOf<Int, Float>() }
+    val msgBounds = remember { HashMap<Int, Float>() }
+    var contextMenuY1 by remember { mutableIntStateOf(0) }
     val view = LocalView.current
-    val contextMenuY1 =
-        msgBounds[vm.selectedMsg]?.toInt() ?: msgBounds[vm.lastSelectedMsg]?.toInt() ?: 0
     val overlayAlpha = animateFloatAsState(
         targetValue = if (vm.selectedMsg != null) 1f else 0f,
         animationSpec = tween(400),
@@ -180,6 +181,9 @@ fun AITabContent(
     )
 
     var clearHistoryConfirmation by remember { mutableStateOf(false) }
+
+    val pendingPrompt by svm.pendingAiPrompt.collectAsState()
+    val appliedPrompt by svm.appliedAiPrompt.collectAsState()
 
     LaunchedEffect(vm.history.size) {
         val sel = vm.selectedMsg
@@ -193,6 +197,13 @@ fun AITabContent(
     val screenHeightPx = LocalWindowInfo.current.containerSize.height
 
     val menuGoesUp = contextMenuY1 > screenHeightPx * 0.6f
+
+    fun selectMessage(index: Int) {
+        vm.selectedMsg = index
+        svm.fireEvent(true)
+        vm.lastSelectedMsg = vm.selectedMsg
+        msgBounds[index]?.let { contextMenuY1 = it.toInt() }
+    }
 
     BackHandler(vm.isEditMode) {
         vm.isEditMode = false
@@ -215,6 +226,17 @@ fun AITabContent(
         vm.selectedModel = vm.availableModels[0]
         vm.loadHistory()
         vm.animateAlpha(alpha)
+    }
+
+    LaunchedEffect(pendingPrompt, appliedPrompt) {
+        val ziel = pendingPrompt ?: return@LaunchedEffect
+        if (appliedPrompt == ziel) return@LaunchedEffect
+        svm.markAiPromptApplied(ziel)
+        vm.setMode("Gemini")
+        val standard = geminiModels.firstOrNull { it.realname == Config.DEF_GEMINI }
+        if (standard != null) vm.selectModel(standard)
+        vm.currentMsg = ziel
+        vm.sendMessage()
     }
 
     if (vm.showLimitReached) {
@@ -334,11 +356,7 @@ fun AITabContent(
                                             )
                                             .zIndex(1000000f)
                                             .combinedClickable(
-                                                onLongClick = {
-                                                    vm.selectedMsg = vm.history.indexOf(msg)
-                                                    svm.fireEvent(true)
-                                                    vm.lastSelectedMsg = vm.selectedMsg
-                                                },
+                                                onLongClick = { selectMessage(vm.history.indexOf(msg)) },
                                                 onClick = {}
                                             )
                                     )
@@ -360,11 +378,7 @@ fun AITabContent(
                                             .background(MaterialTheme.colorScheme.primary)
                                             .zIndex(1000000f)
                                             .combinedClickable(
-                                                onLongClick = {
-                                                    vm.selectedMsg = vm.history.indexOf(msg)
-                                                    svm.fireEvent(true)
-                                                    vm.lastSelectedMsg = vm.selectedMsg
-                                                },
+                                                onLongClick = { selectMessage(vm.history.indexOf(msg)) },
                                                 onClick = {}
                                             )
                                             .padding(horizontal = 14.dp, vertical = 10.dp)
@@ -381,11 +395,7 @@ fun AITabContent(
                                     )
                                     .clip(RoundedCornerShape(2.dp, 10.dp, 10.dp, 10.dp))
                                     .combinedClickable(
-                                        onLongClick = {
-                                            vm.selectedMsg = vm.history.indexOf(msg)
-                                            svm.fireEvent(true)
-                                            vm.lastSelectedMsg = vm.selectedMsg
-                                        },
+                                        onLongClick = { selectMessage(vm.history.indexOf(msg)) },
                                         onClick = {}
                                     ),
                                 cornerRadius = RoundedCornerShape(2.dp, 10.dp, 10.dp, 10.dp),
@@ -449,7 +459,15 @@ fun AITabContent(
                                 input = HazeInput.Sources(state = hazeState),
                                 style = HazeBlurStyle {
                                     backgroundColor(Color(0xFF0C1017))
-                                    colorEffects(listOf(HazeColorEffect.tint(Color(0xFF0C1017).copy(alpha = 0.7f))))
+                                    colorEffects(
+                                        listOf(
+                                            HazeColorEffect.tint(
+                                                Color(0xFF0C1017).copy(
+                                                    alpha = 0.7f
+                                                )
+                                            )
+                                        )
+                                    )
                                     blurRadius(60.dp)
                                     noiseFactor(0f)
                                 }
@@ -908,7 +926,9 @@ fun AITabContent(
         }
     }
 
-    LaunchedEffect(vm.history.size, vm.isLoading) {
-        if (vm.history.isNotEmpty()) listState.animateScrollToItem(vm.history.lastIndex + if (vm.isLoading) 1 else 0)
+    LaunchedEffect(vm.isLoading, vm.streamSeq, vm.history.size) {
+        if (vm.history.isNotEmpty()) {
+            listState.animateScrollToItem(vm.history.lastIndex + if (vm.isLoading) 1 else 0)
+        }
     }
 }
