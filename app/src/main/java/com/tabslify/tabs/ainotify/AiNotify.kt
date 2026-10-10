@@ -2,13 +2,13 @@ package com.tabslify.tabs.ainotify
 
 import android.content.Context
 import androidx.core.content.edit
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 const val AI_NOTIFY_TOPIC = "ai_owner"
 const val AI_NOTIFY_CHANNEL = "ai_notify"
 const val AI_NOTIFY_TAG = "ai_notify"
-const val AI_NOTIFY_KIND_INFO = "info"
 const val AI_NOTIFY_KIND_QUESTIONS = "questions"
 const val AI_NOTIFY_KIND_CANCEL = "cancel"
 const val AI_NOTIFY_ANSWERS_TABLE = "ai_notify_answers"
@@ -37,7 +37,7 @@ data class AiNotifySession(
 
 @Serializable
 data class AiNotifyAnswerRow(
-    val session_id: String,
+    @SerialName("session_id") val sessionId: String,
     val answers: Map<String, List<String>>
 )
 
