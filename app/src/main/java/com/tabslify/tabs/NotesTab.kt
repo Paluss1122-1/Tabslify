@@ -106,7 +106,6 @@ enum class NoteColor(val color: Color) {
 }
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotizenApp() {
     val context = LocalContext.current
@@ -353,7 +352,6 @@ fun NoteCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateNoteDialog(
     onDismiss: () -> Unit,
