@@ -86,8 +86,7 @@ object RestrictionEngine {
         if (now < overrideUntilMs) return false
         if (restrictedCategories.isEmpty()) return false
         val active = restrictedCategories.filter { it in FOCUSGUARD_RESTRICTED_CATEGORIES }
-        if (active.isEmpty()) return false
-        return active.any { category ->
+        return active.isNotEmpty() && active.any { category ->
             val rule = rules.firstOrNull { it.category == category }
             when {
                 rule != null && !rule.enabled -> false
