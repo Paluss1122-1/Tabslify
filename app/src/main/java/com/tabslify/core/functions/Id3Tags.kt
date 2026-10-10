@@ -65,10 +65,10 @@ object Id3Tags {
             }
             val versionMajor = header[3].toInt() and 0xFF
             val flags = header[5].toInt() and 0xFF
-            if (versionMajor < 3 || versionMajor > 4) return@readVia null
+            if (versionMajor !in 3..4) return@readVia null
             if ((flags and 0x80) != 0 || (flags and 0x40) != 0) return@readVia null
             var remaining = syncsafeToInt(header, 6)
-            if (remaining < 0 || remaining > MAX_TAG_BYTES) return@readVia null
+            if (remaining !in 0..MAX_TAG_BYTES) return@readVia null
 
             val skipBuffer = ByteArray(BUFFER_BYTES)
             while (remaining >= 10) {
@@ -178,9 +178,7 @@ object Id3Tags {
                 }
                 true
             } ?: false
-            if (!copied) return false
-
-            return writeVia(context, uri, filePath) { output ->
+            return copied && writeVia(context, uri, filePath) { output ->
                 output.write(newTag)
                 FileInputStream(temp).use { source ->
                     val buffer = ByteArray(BUFFER_BYTES)
@@ -210,9 +208,9 @@ object Id3Tags {
             val versionMajor = header[3].toInt() and 0xFF
             val flags = header[5].toInt() and 0xFF
             val size = syncsafeToInt(header, 6)
-            if (versionMajor < 3 || versionMajor > 4) return@readVia TagState.Unsupported
+            if (versionMajor !in 3..4) return@readVia TagState.Unsupported
             if ((flags and 0x80) != 0 || (flags and 0x40) != 0) return@readVia TagState.Unsupported
-            if (size < 0 || size > MAX_TAG_BYTES) return@readVia TagState.Unsupported
+            if (size !in 0..MAX_TAG_BYTES) return@readVia TagState.Unsupported
             val body = ByteArray(size)
             if (!input.readFully(body)) return@readVia TagState.Unsupported
             TagState.Parsed(parseFrames(versionMajor, body, size), 10 + size)
