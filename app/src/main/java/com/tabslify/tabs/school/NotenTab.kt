@@ -35,6 +35,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -106,7 +108,7 @@ fun gruppenSchnitt(fach: NotenFach, gruppe: NotenGruppe, halbjahr: Int?): Double
 fun notenSchnitt(fach: NotenFach, halbjahr: Int?): Double? {
     var summe = 0.0
     var gewichtSumme = 0.0
-    NotenGruppe.values().forEach { gruppe ->
+    NotenGruppe.entries.forEach { gruppe ->
         val schnitt = gruppenSchnitt(fach, gruppe, halbjahr) ?: return@forEach
         val gewicht = notenGewicht(fach, gruppe)
         summe += schnitt * gewicht
@@ -151,7 +153,7 @@ fun ladeNotenFaecher(prefs: SharedPreferences): List<NotenFach> {
             val gewichte = mutableMapOf<NotenGruppe, Double>()
             val gw = o.optJSONObject("gewicht")
             if (gw != null) {
-                NotenGruppe.values().forEach { gruppe ->
+                NotenGruppe.entries.forEach { gruppe ->
                     if (gw.has(gruppe.name)) gewichte[gruppe] = gw.optDouble(gruppe.name, 1.0)
                 }
             }
@@ -171,7 +173,7 @@ fun speichereNotenFaecher(prefs: SharedPreferences, faecher: List<NotenFach>): L
                     put(
                         "gewicht",
                         JSONObject().also { gw ->
-                            NotenGruppe.values().forEach { gruppe ->
+                            NotenGruppe.entries.forEach { gruppe ->
                                 gw.put(gruppe.name, notenGewicht(fach, gruppe))
                             }
                         }
@@ -693,7 +695,7 @@ private fun NotenFachInhalt(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
-                NotenGruppe.values().forEach { gruppe ->
+                NotenGruppe.entries.forEach { gruppe ->
                     val gruppenWert = gruppenSchnitt(fach, gruppe, filter)
                     if (gruppenWert != null) {
                         Row(
@@ -791,14 +793,13 @@ private fun NotenFachInhalt(
             ) {
                 items(sichtbar, key = { it.id }) { eintrag ->
                     NotenZeile(
-                        eintrag = eintrag,
                         halbjahrText = stringResource(
                             if (eintrag.halbjahr == 2) R.string.noten_halbjahr_2
                             else R.string.noten_halbjahr_1
                         ),
                         datumText = datumFormat.format(Date(eintrag.datum)),
                         notenText = formatNote(eintrag.note, locale),
-                        titelText = if (eintrag.titel.isBlank()) gruppenLabel(eintrag.gruppe) else eintrag.titel,
+                        titelText = eintrag.titel.ifBlank { gruppenLabel(eintrag.gruppe) },
                         onDelete = { onDeleteNote(eintrag) }
                     )
                 }
@@ -821,7 +822,6 @@ private fun NotenFachInhalt(
 
 @Composable
 private fun NotenZeile(
-    eintrag: NotenEintrag,
     halbjahrText: String,
     datumText: String,
     notenText: String,
@@ -910,9 +910,9 @@ private fun NotenEintragDialog(
     onDismiss: () -> Unit
 ) {
     val locale = LocalLocale.current.platformLocale
-    var note by remember { mutableStateOf(2.0) }
+    var note by remember { mutableDoubleStateOf(2.0) }
     var gruppe by remember { mutableStateOf(startGruppe) }
-    var halbjahr by remember { mutableStateOf(startHalbjahr) }
+    var halbjahr by remember { mutableIntStateOf(startHalbjahr) }
     var titel by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -955,7 +955,7 @@ private fun NotenEintragDialog(
                     fontWeight = FontWeight.SemiBold
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    NotenGruppe.values().forEach { eintragGruppe ->
+                    NotenGruppe.entries.forEach { eintragGruppe ->
                         NotenChip(
                             text = "${gruppenEmoji(eintragGruppe)}  ${gruppenLabel(eintragGruppe)}",
                             selected = gruppe == eintragGruppe,
@@ -1022,7 +1022,7 @@ private fun NotenGewichteDialog(
 ) {
     val locale = LocalLocale.current.platformLocale
     var gewichte by remember(fach.name) {
-        mutableStateOf(NotenGruppe.values().associateWith { notenGewicht(fach, it) })
+        mutableStateOf(NotenGruppe.entries.associateWith { notenGewicht(fach, it) })
     }
 
     AlertDialog(
@@ -1042,7 +1042,7 @@ private fun NotenGewichteDialog(
                     color = TextTertiary,
                     fontSize = 12.sp
                 )
-                NotenGruppe.values().forEach { gruppe ->
+                NotenGruppe.entries.forEach { gruppe ->
                     Column {
                         Text(
                             "${gruppenEmoji(gruppe)}  ${gruppenLabel(gruppe)}",
