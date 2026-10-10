@@ -3,6 +3,7 @@ package com.tabslify.core.functions
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.core.content.edit
 import com.tabslify.core.objects.Config
 import com.tabslify.privatetabslifyapp.isOnline
 import com.tabslify.quiethoursnotificationhelper.AiTarget
@@ -14,6 +15,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
+import kotlin.time.Duration.Companion.milliseconds
 
 object SongHashtags {
 
@@ -73,7 +75,7 @@ object SongHashtags {
         }
 
         val response = try {
-            withTimeoutOrNull(PREPARE_TIMEOUT_MS) {
+            withTimeoutOrNull(PREPARE_TIMEOUT_MS.milliseconds) {
                 Config.apiProxyPost(context, body, LOG_TAG, PREPARE_TIMEOUT_MS.toInt())
             }
         } catch (e: CancellationException) {
@@ -187,12 +189,7 @@ object SongHashtags {
 
     fun markTagged(context: Context, path: String) {
         val prefs = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
-        prefs.edit().putStringSet(KEY_TAGGED, taggedPaths(context) + path).apply()
-    }
-
-    fun untag(context: Context, path: String) {
-        val prefs = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
-        prefs.edit().putStringSet(KEY_TAGGED, taggedPaths(context) - path).apply()
+        prefs.edit { putStringSet(KEY_TAGGED, taggedPaths(context) + path) }
     }
 
     fun taggedPaths(context: Context): Set<String> =
@@ -338,7 +335,7 @@ object SongHashtags {
             })
         }
 
-        val response = withTimeoutOrNull(REQUEST_TIMEOUT_MS) {
+        val response = withTimeoutOrNull(REQUEST_TIMEOUT_MS.milliseconds) {
             Config.apiProxyPost(context, body, LOG_TAG, REQUEST_TIMEOUT_MS.toInt())
         }
         if (response == null) {
