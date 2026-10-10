@@ -109,11 +109,8 @@ fun AiNotifyHost(svm: SharedViewModel = viewModel()) {
             Text(active.title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             if (active.source.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    context.getString(R.string.ai_notify_quelle, active.source),
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
+                val quelle = stringResource(R.string.ai_notify_quelle, active.source)
+                Text(quelle, color = TextSecondary, fontSize = 12.sp)
             }
             if (active.body.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -258,18 +255,17 @@ fun AiNotifyHost(svm: SharedViewModel = viewModel()) {
                                 if (value.isEmpty()) complete = false
                                 answers[question.id] = listOf(value)
                             }
-                            else -> {
-                                val value = singleChoice[question.id]
-                                if (value == null) {
+                            else -> when (val value = singleChoice[question.id]) {
+                                null -> {
                                     complete = false
                                     answers[question.id] = emptyList()
-                                } else if (value == AI_NOTIFY_CUSTOM) {
+                                }
+                                AI_NOTIFY_CUSTOM -> {
                                     val custom = singleCustom[question.id].orEmpty().trim()
                                     if (custom.isEmpty()) complete = false
                                     answers[question.id] = listOf(custom)
-                                } else {
-                                    answers[question.id] = listOf(value)
                                 }
+                                else -> answers[question.id] = listOf(value)
                             }
                         }
                     }
