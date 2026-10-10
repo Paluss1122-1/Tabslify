@@ -409,10 +409,10 @@ private fun saveChatToPrefs(
 ) {
     val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
     val jsonArray = JSONArray()
-    for (msg in chatMessages) {
+    for ((text, own) in chatMessages) {
         val jsonObj = JSONObject().apply {
-            put("text", msg.text)
-            put("own", msg.own)
+            put("text", text)
+            put("own", own)
         }
         jsonArray.put(jsonObj)
     }
@@ -441,17 +441,17 @@ private fun loadChatFromPrefs(context: Context, articleLink: String): List<Heise
 private fun saveArticlesToPrefs(context: Context, articles: List<HeiseNewsItem>) {
     val prefs = context.getSharedPreferences(HEISE_PREFS_NAME, Context.MODE_PRIVATE)
     val jsonArray = JSONArray()
-    for (article in articles) {
+    for ((id, title, summary, link, imageUrl, publishedAt, rawTimestamp, source, emailBody) in articles) {
         val jsonObj = JSONObject().apply {
-            put("id", article.id)
-            put("title", article.title)
-            put("summary", article.summary)
-            put("link", article.link)
-            put("imageUrl", article.imageUrl)
-            put("publishedAt", article.publishedAt)
-            put("rawTimestamp", article.rawTimestamp)
-            put("source", article.source)
-            put("emailBody", article.emailBody)
+            put("id", id)
+            put("title", title)
+            put("summary", summary)
+            put("link", link)
+            put("imageUrl", imageUrl)
+            put("publishedAt", publishedAt)
+            put("rawTimestamp", rawTimestamp)
+            put("source", source)
+            put("emailBody", emailBody)
         }
         jsonArray.put(jsonObj)
     }
@@ -1396,8 +1396,8 @@ private suspend fun fetchHeiseNews(packageName: String): List<HeiseNewsItem> =
     withContext(Dispatchers.IO) {
         val feedItems = mutableListOf<HeiseNewsItem>()
 
-        for (feed in NEWS_FEEDS) {
-            val connection = (URL(feed.url).openConnection() as HttpURLConnection).apply {
+        for ((url, source, format, maxItems) in NEWS_FEEDS) {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 12_000
                 readTimeout = 12_000
                 requestMethod = "GET"
@@ -1411,11 +1411,11 @@ private suspend fun fetchHeiseNews(packageName: String): List<HeiseNewsItem> =
             try {
                 if (connection.responseCode in 200..299) {
                     connection.inputStream.use { stream ->
-                        val parsed = when (feed.format) {
-                            NewsFeedFormat.ATOM -> parseAtomFeed(stream, feed.source)
-                            NewsFeedFormat.RSS -> parseRssFeed(stream, feed.source)
+                        val parsed = when (format) {
+                            NewsFeedFormat.ATOM -> parseAtomFeed(stream, source)
+                            NewsFeedFormat.RSS -> parseRssFeed(stream, source)
                         }
-                        feedItems += parsed.take(feed.maxItems)
+                        feedItems += parsed.take(maxItems)
                     }
                 }
             } catch (e: Exception) {
