@@ -1,7 +1,6 @@
 package com.tabslify.tabs.fitnesstab.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -799,7 +798,6 @@ private fun ExerciseEntryCard(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SetRow(
     entryId: String,
