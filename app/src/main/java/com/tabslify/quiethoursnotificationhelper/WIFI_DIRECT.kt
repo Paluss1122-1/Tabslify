@@ -2374,9 +2374,9 @@ suspend fun askServer(
 fun buildSessionStatsText(sessions: List<ListenSession>): String {
     val deduped = MediaAnalyticsManager.dedupForStats(sessions)
     val totals = mutableMapOf<String, Triple<Long, String, Int>>()
-    for (s in deduped) {
-        val cur = totals[s.label] ?: Triple(0L, s.type, 0)
-        totals[s.label] = Triple(cur.first + s.listenedMs, s.type, cur.third + 1)
+    for ((label, type, listenedMs) in deduped) {
+        val cur = totals[label] ?: Triple(0L, type, 0)
+        totals[label] = Triple(cur.first + listenedMs, type, cur.third + 1)
     }
 
     val sorted = totals.entries.sortedByDescending { it.value.first }.take(15)
@@ -2763,12 +2763,10 @@ fun showCredentialsOverlay(context: Context, us: String, pw: String, totp: Strin
                                 .clickable {
                                     val clipboard =
                                         appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(
-                                        ClipData.newPlainText(
-                                            "username",
-                                            value
-                                        )
-                                    )
+                                    clipboard.setPrimaryClip(ClipData.newPlainText(
+                                        "username",
+                                        value
+                                    ))
                                 }
                                 .padding(vertical = 8.dp)
                         ) {
