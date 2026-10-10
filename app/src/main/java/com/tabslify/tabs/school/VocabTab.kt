@@ -61,6 +61,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -115,6 +116,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
+import kotlin.time.Duration.Companion.milliseconds
 
 
 data class Vokabel(val latein: String, val deutsch: String, val id: Int)
@@ -185,8 +187,8 @@ fun leitnerIntervallTage(streak: Int): Int =
     LEITNER_INTERVALLE[streak.coerceIn(0, LEITNER_INTERVALLE.lastIndex)]
 
 fun istFaellig(progress: VokabelProgress?, jetzt: Long = System.currentTimeMillis()): Boolean {
-    if (progress == null || progress.lastPracticed == 0L) return true
-    return jetzt - progress.lastPracticed >= leitnerIntervallTage(progress.streak) * TAG_MS
+    return progress == null || progress.lastPracticed == 0L ||
+        jetzt - progress.lastPracticed >= leitnerIntervallTage(progress.streak) * TAG_MS
 }
 
 fun faelligeVokabeln(
@@ -510,7 +512,7 @@ fun VocabTab(paddingValues: PaddingValues) {
                                     bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)
                                 }.toByteArray()
                                 val sent =
-                                    if (!Config.realDevice) false else trySendImageToLaptop(bytes)
+                                    Config.realDevice && trySendImageToLaptop(bytes)
                                 if (sent) {
                                     usedEngine = ExtractionEngine.LAPTOP
                                     val result = flashcardVokabelnFlow.first { it != null }
@@ -1733,8 +1735,8 @@ fun LearnScreen(
     var ergebnisse by remember { mutableStateOf(emptyList<LernErgebnis>()) }
     var falscheKarten by remember { mutableStateOf(savedSession?.falscheKarten ?: emptyList()) }
     var flushMarke by remember { mutableIntStateOf(0) }
-    var startZeit by remember { mutableStateOf(System.currentTimeMillis()) }
-    var endeZeit by remember { mutableStateOf(0L) }
+    var startZeit by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var endeZeit by remember { mutableLongStateOf(0L) }
     var aufgedeckt by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf<AntwortFeedback?>(null) }
     var tipEingabe by remember { mutableStateOf("") }
@@ -1912,7 +1914,7 @@ fun LearnScreen(
     LaunchedEffect(feedback) {
         val stand = feedback ?: return@LaunchedEffect
         if (stand.korrekt) {
-            delay(1100)
+            delay(1100.milliseconds)
             feedback = null
         }
     }
