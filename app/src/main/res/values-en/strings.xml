@@ -88,9 +88,7 @@
     <string name="tabslify_login">Tabslify Login</string>
     <string name="invalid_credentials">Invalid Credentials</string>
     <string name="anmelden">Sign in</string>
-    <string name="open_notification_frame">Open notification frame</string>
     <string name="open_settings_frame">Open settings frame</string>
-    <string name="keine_benachrichtigungen">No notifications</string>
     <string name="zuletzt_verwendet">Recently used</string>
     <string name="alle_tabs">All tabs</string>
     <string name="mediaplayerservice_tab_songs_podcasts_abspielen">MediaPlayerService &amp; tab: play songs &amp; podcasts</string>
@@ -768,7 +766,6 @@
     <string name="rdp_benutzername">User name (leave domain empty)</string>
     <string name="rdp_passwort">RDP password</string>
     <string name="rdp_passwort_merken">Remember password</string>
-    <string name="rdp_zurueck">Cancel and close the app</string>
     <string name="rdp_verbinde">Connecting to %1$s…</string>
     <string name="rdp_hinweis_nativ">Direct RDP from the app, without an extra service on the machine. Like the Windows app.</string>
     <string name="rdp_fehler_angaben">Please provide host, user and password.</string>
@@ -912,7 +909,7 @@
     <string name="sync_totp_cloud_loschen">Remove cloud-2FA</string>
     <string name="sync_totp_lokal_ubernehmen">Take local 2FA</string>
     <string name="sync_konflikt_password_different">Password differs between cloud and local.</string>
-    <string name="sync_entschluesselung_fehlgeschlagen">%1$d entries could not be decrypted – check master password</string>
+    <string name="sync_entschluesselung_fehlgeschlagen" tools:ignore="PluralsCandidate">%1$d entries could not be decrypted – check master password</string>
     <string name="sync_diagnose_titel">Sync diagnosis</string>
     <string name="sync_diagnose_geraet">Device</string>
     <string name="sync_diagnose_echtes_geraet">Real device</string>
@@ -982,7 +979,6 @@
     <string name="modus_unbekannt">Unknown</string>
     <string name="modus_aufenthalt">Stop</string>
     <string name="aktivitaet">Activity</string>
-    <string name="explore_export">📤 Export</string>
     <string name="explore_export_tag">Day</string>
     <string name="explore_export_7_tage">7 days</string>
     <string name="explore_export_laeuft">Export running…</string>
@@ -1175,8 +1171,6 @@
         <item quantity="one">%1$d grade</item>
         <item quantity="other">%1$d grades</item>
     </plurals>
-    <string name="ai_chat">AI Chat</string>
-    <string name="unterstutzung_beim_lernen">Support while learning</string>
     <string name="set_loschen">Delete set?</string>
     <string name="wird_geloscht">\"%1$s\" will be deleted.</string>
     <string name="vokabel_loeschen">Delete word?</string>
@@ -1245,7 +1239,7 @@
     <string name="alle_faellig">Due items</string>
     <string name="alles_gelernt">All learned, nothing due</string>
     <string name="sitzende_vokabeln" tools:ignore="PluralsCandidate">%1$d of %2$d learned</string>
-    <string name="faellig_kurz">%1$d due</string>
+    <string name="faellig_kurz" tools:ignore="PluralsCandidate">%1$d due</string>
     <string name="letzte_sitzung">Last %1$s</string>
     <string name="nur_schwache">Only weak ones (%1$d)</string>
     <string name="modus_auswahl">4 answers</string>
@@ -2338,4 +2332,25 @@
     <string name="bluetooth_noch_an">Bluetooth is still on</string>
     <string name="bluetooth_noch_an_text">%1$s is no longer needed - Bluetooth can go off again</string>
     <string name="bluetooth_ausschalten">Turn off</string>
+    <string name="datei_wirklich_loeschen">Really delete file?</string>
+    <string name="datei_wird_geloescht">\"%1$s\" will be deleted from the cloud. This cannot be undone.</string>
+
+    <string name="tabslify_textaktionen">Tabslify AI</string>
+    <string name="textaktion_zusammenfassen">Summarize</string>
+    <string name="textaktion_erklaeren">Explain</string>
+    <string name="textaktion_uebersetzen">Translate</string>
+    <string name="textaktion_korrigieren">Proofread</string>
+    <string name="textaktion_eigener_prompt">Custom action</string>
+    <string name="textaktion_eigenes_feld">Own prompt (e.g. \"Explain like I am five\")</string>
+    <string name="textaktion_starten">Run</string>
+    <string name="textaktion_kein_text">No text to process found.</string>
+    <string name="textaktion_gekuerzt" tools:ignore="PluralsCandidate">The displayed text was shortened to %1$d characters.</string>
+    <string name="textaktion_nur_lesen">Read-only field</string>
+    <string name="textaktion_limit_erreicht">Daily limit reached. Resets: %1$s</string>
+    <string name="textaktion_auswahl">What should happen with the text?</string>
+    <string name="textaktion_eigenes_feld_fehlt">Please enter a prompt first.</string>
+    <string name="textaktion_neue_aktion_waehlen">Choose a new action</string>
+    <string name="textaktion_denkt">Thinking…</string>
+    <string name="im_chat_oeffnen">Open in AI chat</string>
+    <string name="chat_geoeffnet">Opening in the AI chat</string>
 </resources>
